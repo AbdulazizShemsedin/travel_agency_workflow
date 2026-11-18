@@ -897,3 +897,17 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   6. Direct authoritative support for backend `medical_current` (0.-22).
 - **Applicant Table Column Audit**: Audited all 16 columns of `ApplicantTable.tsx`. Integrated `resolveEffectiveMedical` across columns 8 (Medical Status), 9 (Exam Date), and 10 (Exam Remaining). Fixed registration form default from `"Pending"` to `""`.
 - **Automated Persistent Regression Test Suite**: Created `tests/selection-and-medical.test.ts` (16 unit and integration test assertions across 2 test suites) running via `npm test` (`npx tsx --test`). Verified 16/16 tests passing, clean TypeScript check (`npx tsc --noEmit`), and full Next.js production build (`npm run build`, 30/30 static and dynamic routes compiled in 9.2s).
+
+## 29. Applicant-Scoped Placements, View-Only Controls & Live Chat (2026-11-16)
+- **Placements for one applicant**: `listPlacementsForApplicantV2` sends `{ applicant }` and keeps only matching rows. The backend drops a list-of-objects filter and returned every placement (see `BACKEND_FIX_PROMPT_list_filters.md`). Used by the applicant detail, edit and document-center pages.
+- **View-only roles**: the follow-up workspace derives edit rights from roles held with write access only; each stage card is a `<fieldset disabled>` for users without that right. The applicant page hides Cancel / Restore / Restart from users whose every role is view-only.
+- **Follow-up page for older applicants**: `fetchOperationalWorkspaceDataV2(stream, corridor, onlyApplicant)` loads that applicant and its placements directly instead of the 100 most recent.
+- **Live chat (Centrifugo)**: `src/lib/realtime.ts` connects with the token from `auth.read?op=get_realtime_token`; pushed events refetch threads and messages, and polling slows to 60s while connected. With Centrifugo off on the server, chat polls as before.
+
+## 30. Frontend on the backend's /v1 API (2026-11-17)
+- **How calls reach /v1**: API modules still name operations the old way; `requestV2` translates each call to its /v1 route through `src/lib/api/v2/v1.ts` and the table `v1Routes.generated.ts` (path and query parameters from the arguments, the rest in the body; fields a closed /v1 body does not declare are left out and listed in `window.__v1Dropped`). Answers are the /v1 body (a list route's `items`); errors read `detail`/`kind` from problem+json.
+- **Proxy**: `src/app/v1/[...path]/route.ts` passes /v1 through (all methods, streamed bodies, redirects not followed, cookies as on the /api/method proxy). The old proxy redirects GET links (images, downloads, backend-written media links) to /v1 when the backend serves /v1.
+- **Either backend**: a backend without /v1 (plain 404 on a /v1 route) switches the session to the old routes, so the frontend can be deployed before or after the backend.
+- **Regenerate** after backend route changes: `npm run gen:v1-routes -- <backend>/openapi.json` (the backend serves it without login when PUBLIC_DOCS=1), then `npm run check:v1-calls`.
+- **Verified** on a copy of the data with METHOD_API=0: every page as Admin, view-only, Communication Manager, Clearance Officer, Registrar, Ticketer, Saudi and Kuwait agency; a Saudi and a Kuwait case from registration to departure through the API layer; UI login, view-only controls, and live chat over Centrifugo (310 ms). Also against a backend without /v1.
+- **Backend gaps**: no /v1 route for `list_chat_contacts` (agency chat contacts) or `update_storage_settings`.

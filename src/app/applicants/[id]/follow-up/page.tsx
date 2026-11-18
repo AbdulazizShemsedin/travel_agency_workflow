@@ -27,8 +27,9 @@ export default function ApplicantFollowUpPage({
     refetch,
     error,
   } = useQuery<WorkspaceApplicantRow[]>({
-    queryKey: ["operational_workspace_v2", "follow_up"],
-    queryFn: () => fetchOperationalWorkspaceDataV2("follow_up"),
+    queryKey: ["operational_workspace_v2", "follow_up", decodedId],
+    queryFn: () => fetchOperationalWorkspaceDataV2("follow_up", "All", decodedId),
+    enabled: !!decodedId,
   });
 
   // 2. Fetch Employees for assignment dropdowns

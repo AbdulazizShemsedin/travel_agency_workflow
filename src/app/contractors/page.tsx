@@ -365,12 +365,6 @@ export default function ContractorsPage() {
   const handleSubmitEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingContractor) return;
-    if (!editFormData.email.trim()) {
-      toast.error("Portal Email Required", {
-        description: "User login email is strictly required to update the agency account.",
-      });
-      return;
-    }
     updateContractorMutation.mutate({
       name: editingContractor.name,
       values: {
@@ -919,16 +913,18 @@ export default function ContractorsPage() {
 
               <div className="space-y-1">
                 <Label htmlFor="edit_email" className="text-xs font-semibold">
-                  Portal Login Email / Account <span className="text-rose-500">*</span>
+                  Portal Login Email / Account
                 </Label>
+                {/* The agency's e-mail is its login; the backend refuses a change here. */}
                 <Input
                   id="edit_email"
                   type="email"
-                  required
-                  placeholder="contact@agency.sa"
+                  readOnly
+                  disabled
                   value={editFormData.email}
-                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  className="bg-slate-50 dark:bg-[#16161d] text-slate-500"
                 />
+                <p className="text-[10px] text-slate-400">The login e-mail cannot be changed here.</p>
               </div>
 
               <div className="space-y-1">

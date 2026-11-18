@@ -10,6 +10,7 @@
  * - POST /api/method/agency_tracking.api.applicant.write?op=update_applicant_for_lmis
  * - POST /api/method/agency_tracking.api.applicant.write?op=cancel_applicant
  * - POST /api/method/agency_tracking.api.applicant.write?op=restart_applicant
+ * - POST /api/method/agency_tracking.api.reversal.write?op=reverse_last_step (restore a cancelled applicant)
  * - POST /api/method/agency_tracking.api.country_ban.write?op=set_country_ban
  * - POST /api/method/agency_tracking.api.country_ban.read?op=list_country_bans
  * - POST /api/method/agency_tracking.api.country_ban.write?op=remove_country_ban
@@ -17,6 +18,7 @@
  */
 
 import { requestV2 } from "./client";
+import { reverseLastStepV2 } from "./undo";
 import type { V2MedicalCurrent } from "./medical";
 import {
   toClientCocStatus,
@@ -1052,8 +1054,11 @@ export function getPreCancellationSnapshot(
 }
 
 /**
- * Restores a Cancelled Applicant process back to its pre-cancellation state via the sanctioned
- * Go backend endpoint: agency_tracking.api.applicant.write?op=restart_applicant.
+ * Restores a Cancelled Applicant process back to its exact pre-cancellation state.
+ * Unlike restart_applicant, this keeps the current cycle_number and brings back the
+ * Placement and Clearance Steps the cancel closed, each to the status it had.
+ * The backend does this as the undo of the cancel: reversal.reverse_last_step on the
+ * Applicant, from Cancelled (Registrar or Manager).
  */
 export async function restoreApplicantProcessV2(
   applicantName: string,
@@ -1062,18 +1067,7 @@ export async function restoreApplicantProcessV2(
   if (!reason || !reason.trim()) {
     throw new Error("A written restoration reason is required to restore a cancelled applicant process.");
   }
-  return requestV2(
-    "/api/method/agency_tracking.api.applicant.write?op=restart_applicant",
-    {
-      method: "POST",
-      body: {
-        applicant_name: applicantName,
-        target_status: "Registered",
-        reason: reason.trim(),
-        override_reason: reason.trim(),
-      },
-    }
-  );
+  return reverseLastStepV2("Applicant", applicantName, "Cancelled", reason.trim());
 }
 
 /**

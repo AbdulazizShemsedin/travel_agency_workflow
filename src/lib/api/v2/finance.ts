@@ -371,7 +371,7 @@ export async function createCommissionBatchV2(
         contractor,
         destination_country: destinationCountry,
         ...(transactionNames && transactionNames.length > 0
-          ? { transaction_names: JSON.stringify(transactionNames) }
+          ? { transaction_names: transactionNames }
           : {}),
         ...(currency ? { currency } : {}),
         ...(typeof requestedAdvanceAmount === "number" ? { requested_advance_amount: requestedAdvanceAmount } : {}),
@@ -630,7 +630,7 @@ export async function settleBatchItemsV2(
     {
       method: "POST",
       body: {
-        item_names: JSON.stringify(itemNames),
+        item_names: itemNames,
       },
     }
   );
@@ -650,7 +650,7 @@ export async function unsettleBatchItemsV2(
     {
       method: "POST",
       body: {
-        item_names: JSON.stringify(itemNames),
+        item_names: itemNames,
         ...(reason ? { reason } : {}),
       },
     }
@@ -782,7 +782,7 @@ export async function releaseUnpaidItemsV2(
     {
       method: "POST",
       body: {
-        item_names: Array.isArray(itemNames) ? JSON.stringify(itemNames) : itemNames,
+        item_names: Array.isArray(itemNames) ? itemNames : JSON.parse(String(itemNames || "[]")),
       },
     }
   );
@@ -820,7 +820,7 @@ export async function addWorkersToBatchV2(
       method: "POST",
       body: {
         batch_name: batchName,
-        commission_names: Array.isArray(commissionNames) ? JSON.stringify(commissionNames) : commissionNames,
+        commission_names: Array.isArray(commissionNames) ? commissionNames : [commissionNames],
       },
     }
   );
@@ -850,7 +850,7 @@ export async function removeWorkersFromBatchV2(
       method: "POST",
       body: {
         batch_name: batchName,
-        commission_names: Array.isArray(commissionNames) ? JSON.stringify(commissionNames) : commissionNames,
+        commission_names: Array.isArray(commissionNames) ? commissionNames : [commissionNames],
       },
     }
   );

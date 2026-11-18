@@ -12,7 +12,7 @@
  * - POST /api/method/agency_tracking.api.placement.read?op=get_placement_officers
  */
 
-import { requestV2 } from "./client";
+import { requestV2, ApiV2Error } from "./client";
 import { cleanFileId } from "./documents";
 import { V2UserTodoItem } from "@/types/workspace";
 
@@ -495,13 +495,24 @@ export async function forfeitInjazAndRestartV2(
 export async function getInjazPaperV2(
   identifier: string
 ): Promise<{ message?: any; [key: string]: any }> {
+  // The paper is read by its Te'shir step, or by the case (PLM-) it belongs to. Sending a step id as
+  // placement_name made the backend look for a case of that name ("No case found for this step").
+  let id = String(identifier || "").trim();
+  if (/^APP-/i.test(id)) {
+    const { listPlacementsForApplicantV2 } = await import("./placements");
+    const cases = await listPlacementsForApplicantV2(id);
+    const live = cases.find((p) => p.status !== "Cancelled") || cases[0];
+    if (!live?.name) throw new ApiV2Error(`${id} has no case with an Injaz paper.`, 404, "DoesNotExistError");
+    id = live.name;
+  }
+  const isCase = /^PLM-/i.test(id);
   return requestV2(
     "/api/method/agency_tracking.api.clearance.read?op=get_injaz_paper",
     {
       method: "POST",
       body: {
-        clearance_step_name: identifier,
-        placement_name: identifier,
+        clearance_step_name: id,
+        ...(isCase ? { placement_name: id } : {}),
       },
     }
   );

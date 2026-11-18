@@ -116,7 +116,13 @@ export function ApplicantFollowUpWorkspace({
   isFullPage = false,
 }: ApplicantFollowUpWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles: allRoles, isReadOnly } = useAuth();
+  // Only roles held with write access decide what this screen lets the user change. A role held
+  // view-only still shows its data, but its buttons stay disabled (the backend refuses them anyway).
+  const roles = React.useMemo(
+    () => (allRoles || []).filter((r) => !isReadOnly(String(r))),
+    [allRoles, isReadOnly]
+  );
 
   // Local state copy of current applicant row for instant feedback
   const [currentRow, setCurrentRow] = React.useState<WorkspaceApplicantRow | null>(row);
@@ -136,107 +142,10 @@ export function ApplicantFollowUpWorkspace({
     enabled: Boolean(activePlacementIdentifier),
   });
 
+  // The server's row is the truth. Every change here reloads it, so a newer row replaces the local
+  // copy whole: an undo or another user's change (a stage going back, a cleared field) shows at once.
   React.useEffect(() => {
-    if (!row) return;
-    setCurrentRow((prev) => {
-      if (!prev) return row;
-      const isSameApplicant =
-        (row.applicantId && prev.applicantId === row.applicantId) ||
-        (row.name && prev.name === row.name) ||
-        (row.passportNumber && prev.passportNumber === row.passportNumber);
-      if (!isSameApplicant) return row;
-
-      // Helper to preserve populated local field value if server row has undefined/blank
-      const resolveFollowUpField = (serverVal: any, localVal: any) => {
-        if (serverVal !== undefined && serverVal !== null && serverVal !== "" && serverVal !== "—") {
-          return serverVal;
-        }
-        return localVal !== undefined && localVal !== null && localVal !== "—" ? localVal : serverVal;
-      };
-
-      // Intelligently preserve locally modified statuses if refreshed row is stale
-      const localInjazPaid = (prev.injazPayment || "").toLowerCase() === "paid";
-      const serverInjazPaid = (row.injazPayment || "").toLowerCase() === "paid";
-      const resolvedInjazPayment = (localInjazPaid && !serverInjazPaid) ? prev.injazPayment : (row.injazPayment || prev.injazPayment);
-
-      const localTeshir = prev.teshirStatus;
-      const serverTeshir = row.teshirStatus;
-      const isServerTeshirValid = serverTeshir && serverTeshir !== "—" && serverTeshir !== "Pending" && serverTeshir !== "In Progress";
-      const resolvedTeshirStatus = isServerTeshirValid ? serverTeshir : (localTeshir || serverTeshir);
-
-      const localLmisIssued = (prev.lmisStatus || "").toUpperCase() === "ISSUED" || prev.lms?.status === "Issued" || prev.lms?.status === "Complete" || prev.lms?.status === "Completed";
-      const serverLmisIssued = (row.lmisStatus || "").toUpperCase() === "ISSUED" || row.lms?.status === "Issued" || row.lms?.status === "Complete" || row.lms?.status === "Completed";
-      const resolvedLmisStatus = (localLmisIssued && !serverLmisIssued) ? prev.lmisStatus : (row.lmisStatus || prev.lmisStatus);
-
-      const localEmbassyStamped =
-        (prev.embassyStatus || "").toLowerCase() === "stamped" ||
-        (prev.embassy?.status || "").toLowerCase() === "stamped" ||
-        (prev.embassy?.status || "").toLowerCase() === "approved" ||
-        (prev.embassy?.status || "").toLowerCase() === "complete" ||
-        (prev.embassy?.status || "").toLowerCase() === "completed";
-      const serverEmbassyStamped =
-        (row.embassyStatus || "").toLowerCase() === "stamped" ||
-        (row.embassy?.status || "").toLowerCase() === "stamped" ||
-        (row.embassy?.status || "").toLowerCase() === "approved" ||
-        (row.embassy?.status || "").toLowerCase() === "complete" ||
-        (row.embassy?.status || "").toLowerCase() === "completed";
-      const resolvedEmbassyStatus =
-        (localEmbassyStamped && !serverEmbassyStamped)
-          ? (prev.embassyStatus || "Stamped")
-          : (row.embassyStatus || prev.embassyStatus);
-
-      const localDeparted =
-        prev.departureStatus === "Departed" ||
-        prev.departureStatus === "Local return" ||
-        prev.departureStatus === "International return" ||
-        (prev.placementStatus || "").toLowerCase() === "departed";
-      const serverDeparted =
-        row.departureStatus === "Departed" ||
-        row.departureStatus === "Local return" ||
-        row.departureStatus === "International return" ||
-        (row.placementStatus || "").toLowerCase() === "departed";
-      const resolvedDepartureStatus =
-        (localDeparted && !serverDeparted)
-          ? prev.departureStatus
-          : (row.departureStatus || prev.departureStatus);
-
-      const localMedical2 = prev.medical2Status === "FIT" || prev.medical2Status === "UNFIT";
-      const serverMedical2 = row.medical2Status === "FIT" || row.medical2Status === "UNFIT";
-      const resolvedMedical2Status =
-        (localMedical2 && !serverMedical2)
-          ? prev.medical2Status
-          : (row.medical2Status || prev.medical2Status);
-
-      return {
-        ...row,
-        lmisStatus: resolvedLmisStatus,
-        injazPayment: resolvedInjazPayment,
-        teshirStatus: resolvedTeshirStatus,
-        embassyStatus: resolvedEmbassyStatus,
-        departureStatus: resolvedDepartureStatus,
-        medical2Status: resolvedMedical2Status,
-        submissionDate: resolveFollowUpField(row.submissionDate, prev.submissionDate),
-        visaDeadline: resolveFollowUpField(row.visaDeadline, prev.visaDeadline),
-        visaIssueDate: resolveFollowUpField(row.visaIssueDate, prev.visaIssueDate),
-        visaNumber: resolveFollowUpField(row.visaNumber, prev.visaNumber),
-        embassyRemarks: resolveFollowUpField(row.embassyRemarks, prev.embassyRemarks),
-        lmisRemark: resolveFollowUpField(row.lmisRemark, prev.lmisRemark),
-        teshirRemark: resolveFollowUpField(row.teshirRemark, prev.teshirRemark),
-        ticketRemark: resolveFollowUpField(row.ticketRemark, prev.ticketRemark),
-        laborId: resolveFollowUpField(row.laborId, prev.laborId),
-        injazApplicationId: resolveFollowUpField(row.injazApplicationId, prev.injazApplicationId),
-        appointmentDate: resolveFollowUpField(row.appointmentDate, prev.appointmentDate),
-        ticketNumber: resolveFollowUpField(row.ticketNumber, prev.ticketNumber),
-        flightDate: resolveFollowUpField(row.flightDate, prev.flightDate),
-        flightTime: resolveFollowUpField(row.flightTime, prev.flightTime),
-        plc: row.plc || prev.plc,
-        embassy: (localEmbassyStamped && !serverEmbassyStamped)
-          ? (prev.embassy ? { ...prev.embassy, status: "Stamped" } : ({ status: "Stamped" } as any))
-          : (row.embassy || prev.embassy),
-        lms: row.lms || prev.lms,
-        injaz: row.injaz || prev.injaz,
-      };
-    });
+    if (row) setCurrentRow(row);
   }, [row]);
 
   // Handle ESC key to close
@@ -268,10 +177,10 @@ export function ApplicantFollowUpWorkspace({
       ? {
           user: authUser.email,
           full_name: authUser.full_name || authUser.email,
-          roles: Array.isArray(authUser.roles) ? authUser.roles : [],
+          roles,
         }
       : null;
-  }, [authUser]);
+  }, [authUser, roles]);
 
   const isAdmin = React.useMemo(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
@@ -685,23 +594,24 @@ export function ApplicantFollowUpWorkspace({
   const isEmbassyStamped = isEmbassyConfirmedFinished;
   const isDepartureComplete = isDepartureConfirmedFinished;
 
-  const normalizedInjazPayment = React.useMemo(() => {
+  // Plain values, not hooks: this runs after the early return above, where a hook would change React's hook order.
+  const normalizedInjazPayment = (() => {
     const p = String(currentRow?.injazPayment || currentRow?.injaz?.injaz_payment_status || currentRow?.injaz?.payment_status || "").trim().toLowerCase();
     if (p === "paid") return "Paid";
     if (p === "printed") return "Printed";
     return "Unpaid";
-  }, [currentRow?.injazPayment, currentRow?.injaz]);
+  })();
 
   const isInjazPaid = normalizedInjazPayment === "Paid";
 
-  const normalizedTeshirStatus = React.useMemo(() => {
+  const normalizedTeshirStatus = (() => {
     if (isTeshirConfirmedFinished) return "Completed";
-    const st = String(currentRow?.teshirStatus || (currentRow?.injaz as any)?.taeshir_status || "").trim().toUpperCase();
-    if (st === "RECEIVED") return "RECEIVED";
-    if (st === "READY TO EMBASSY") return "READY TO EMBASSY";
+    // The step's own Tesheer status first; a new step has none (the backend sets no default).
+    const st = String((currentRow?.injaz as any)?.taeshir_status || currentRow?.teshirStatus || "").trim().toUpperCase();
+    if (st === "INFORMED" || st === "RECEIVED" || st === "READY TO EMBASSY") return st;
     if (st === "COMPLETED" || st === "COMPLETE" || st === "ISSUED" || st === "APPROVED") return "Completed";
-    return "INFORMED";
-  }, [isTeshirConfirmedFinished, currentRow?.teshirStatus, currentRow?.injaz]);
+    return "";
+  })();
 
   // Check if pipeline has advanced past embassy / ticketing
   const isPlacementAdvanced = ["Stamped", "Ticketed", "Departed"].includes(
@@ -1281,7 +1191,7 @@ export function ApplicantFollowUpWorkspace({
                     <div className="pt-2 flex items-center gap-2 flex-wrap">
                       <Button
                         size="sm"
-                        disabled={isAdvancingToProcessing}
+                        disabled={isAdvancingToProcessing || !isFollowUpOperator}
                         onClick={async () => {
                           try {
                             setIsAdvancingToProcessing(true);
@@ -1329,6 +1239,7 @@ export function ApplicantFollowUpWorkspace({
               {/* ----------------------------------------------------------- */}
               {/* CARD 1: LMIS (Top-Left)                                     */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditLmis} className="contents">
               <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
                 <div>
                   {/* Card Header */}
@@ -1726,10 +1637,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 2: TELESIGN (KUWAIT) OR TE'SHIR / INJAZ (SAUDI)        */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditTaeshir} className="contents">
               {isKuwait ? (
                 <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
                   <div>
@@ -2146,9 +2059,8 @@ export function ApplicantFollowUpWorkspace({
                               onChange={async (e) => {
                                 const val = e.target.value;
                                 try {
-                                  if (injazStepName && val !== "Completed") {
-                                    await setTaeshirStatusV2(injazStepName, val);
-                                  }
+                                  if (!injazStepName) return;
+                                  await setTaeshirStatusV2(injazStepName, val);
                                   toast.success(`Te'shir status updated to ${val}`);
                                   setCurrentRow((prev) => (prev ? { 
                                     ...prev, 
@@ -2169,10 +2081,12 @@ export function ApplicantFollowUpWorkspace({
                                   : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                               )}
                             >
+                              {/* The backend's Tesheer statuses. Completed is shown, not chosen: the stage is finished with "Te'shir Completed". */}
+                              <option value="" disabled>Not set</option>
                               <option value="INFORMED">INFORMED</option>
                               <option value="RECEIVED">RECEIVED</option>
                               <option value="READY TO EMBASSY">READY TO EMBASSY</option>
-                              <option value="Completed">Completed</option>
+                              <option value="Completed" disabled>Completed</option>
                             </select>
                           ) : (
                             <div className={cn(
@@ -2181,7 +2095,7 @@ export function ApplicantFollowUpWorkspace({
                                 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
                                 : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                             )}>
-                              <span>{normalizedTeshirStatus}</span>
+                              <span>{normalizedTeshirStatus || "Not set"}</span>
                               {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
                             </div>
                           )}
@@ -2384,8 +2298,8 @@ export function ApplicantFollowUpWorkspace({
                             <span>Finish stage</span>
                           </Button>
 
-                          {/* Missed Appointment Button */}
-                          {injazStepName && (
+                          {/* Missed Appointment Button: not on a finished stage (the backend refuses it there) */}
+                          {injazStepName && !isTeshirCompleted && (
                             <Button
                               type="button"
                               variant="outline"
@@ -2463,10 +2377,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               )}
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 3: EMBASSY / WAKALA (Bottom-Left)                      */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditEmbassy} className="contents">
               <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden">
                 <div>
                   {/* Card Header */}
@@ -2980,10 +2896,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 4: TICKET & DEPARTURE (Bottom-Right)                   */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditMedical} className="contents">
               <div className={cn("rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden transition-opacity", isTicketLocked && "opacity-60 bg-slate-50/50 dark:bg-[#121216]/50")}>
                 <div>
                   {/* Card Header */}
@@ -3385,6 +3303,7 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
             </div>
           </div>

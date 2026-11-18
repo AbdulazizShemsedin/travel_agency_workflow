@@ -1,0 +1,15 @@
+# Not uploaded by `vercel deploy`: local secrets and addresses, build output, test scratch.
+.env*
+!.env.example
+.next
+node_modules
+scratch
+tests
+test_*.mjs
+travel-agency-extension
+*.tsbuildinfo
+# Reference documents, videos and sample personal documents; no code imports them.
+src/Assets
+*.md
+!README.md
+extracted_actual_texts.json

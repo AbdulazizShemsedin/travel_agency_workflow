@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { toV1Url } from "@/lib/api/v2/v1";
 
 // The operation a request runs: `op` on a grouped endpoint, otherwise the method's own name.
 function operationName(methodPath: string, op?: string | null) {
   return op || methodPath.split(".").pop() || methodPath;
+}
+
+// Whether the backend has the /v1 API: its /v1/me answers problem+json (401 without a session);
+// a backend without /v1 answers a plain 404. Checked at most once a minute.
+let v1Probe: { at: number; ok: boolean } | null = null;
+async function backendServesV1(): Promise<boolean> {
+  if (v1Probe && Date.now() - v1Probe.at < 60000) return v1Probe.ok;
+  const base = (process.env.BACKEND_URL || process.env.GO_BACKEND_URL || process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL || "").replace(/\/$/, "");
+  let ok = false;
+  if (base) {
+    try {
+      const res = await fetch(`${base}/v1/me`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+      ok = (res.headers.get("content-type") || "").includes("problem+json") || res.ok;
+    } catch {
+      ok = false;
+    }
+  }
+  v1Probe = { at: Date.now(), ok };
+  return ok;
 }
 
 function opFromBody(bodyText: string): string | null {
@@ -458,6 +478,15 @@ export async function GET(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
+
+  // A GET link to an old route (an <img src>, a download, a media link the backend wrote) goes to
+  // its /v1 route when the backend serves /v1 (it may serve /v1 only).
+  const v1Link = toV1Url(`/api/method/${methodPath}${req.nextUrl.search}`);
+  if (v1Link.startsWith("/v1/") && (await backendServesV1())) {
+    // Relative Location: behind a proxy req.nextUrl.origin can be the internal host.
+    return new Response(null, { status: 307, headers: { Location: v1Link } });
+  }
+
   const config = getFrappeConfig(req, methodPath);
   if (!config) {
     return NextResponse.json(

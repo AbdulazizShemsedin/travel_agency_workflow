@@ -289,7 +289,10 @@ export function ApplicantTable() {
   // Join active-placement derived fields onto each applicant row.
   const { data: placementsData = [] } = useQuery({
     queryKey: ["applicants-placement-join"],
-    queryFn: () => listPlacementsV2(),
+    // The badge shows the case's status (a worker's own status stays "CV Generated" for the whole
+    // case), so load as many cases as one /v1 page allows: with the default 100, an older case
+    // was missing and a departed worker showed "CV Generated".
+    queryFn: () => listPlacementsV2(undefined, 500),
     enabled: Boolean(authUser),
     staleTime: 30000,
     retry: false,
@@ -503,24 +506,7 @@ export function ApplicantTable() {
       toast.success(data?.message || "Applicant process successfully restored to previous state.");
     },
     onError: (err: any) => {
-      const msg = err?.message || String(err);
-      const isUnimplemented =
-        err?.statusCode === 501 ||
-        err?.statusCode === 404 ||
-        err?.code === "MethodNotImplemented" ||
-        msg.includes("not yet implemented") ||
-        msg.includes("Failed to get method") ||
-        msg.includes("has no attribute 'restore_applicant'");
-      if (isUnimplemented) {
-        setRestoreErrorNotice(
-          "Backend restoration service ('applicant_api.restore_applicant') is not yet implemented on the server. To resume the applicant's workflow, use 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
-        );
-        toast.info("Backend restoration service pending deployment", {
-          description: "Use 'Restart as New Attempt' to start a new cycle in the meantime."
-        });
-      } else {
-        toast.error("Restoration failed", { description: msg });
-      }
+      toast.error("Restoration failed", { description: err?.message || String(err) });
     },
   });
 
@@ -1420,7 +1406,8 @@ export function ApplicantTable() {
                         className="px-1.5 py-2 xl:py-2.5 text-right truncate"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1 truncate">
+                        {/* Wrap, never clip: with justify-end a clipped row hid its first buttons under the date cell. */}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           {/* Stage: Draft — Register Applicant */}
                           {stage === "Draft" && (
                             <button

@@ -2,14 +2,16 @@
  * Core API Client for Agency Tracking Backend V2
  * 
  * Strict Architectural Rules:
- * 1. ONLY whitelisted `/api/method/agency_tracking.*` and standard `/api/method/login`, `/api/method/logout`, `/api/method/upload_file` endpoints are permitted.
+ * 1. Callers name an operation the old way (`/api/method/agency_tracking.*`); requestV2 sends it to
+ *    the backend's /v1 route for that operation (see ./v1.ts). A `/v1/...` endpoint is sent as is.
  * 2. Raw `/api/resource/*` requests are strictly forbidden in V2.
- * 3. Automatic CSRF token resolution (`X-Frappe-CSRF-Token`) for state-changing POST requests.
+ * 3. Automatic CSRF token resolution (`X-Frappe-CSRF-Token`) for state-changing requests.
  * 4. Honest error propagation preserving backend 400, 401, 403, 417, 500 error messages and exceptions.
  * 5. Session cookies transmitted with credentials: "include".
  */
 
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { toV1Call } from "./v1";
 
 export class ApiV2Error extends Error {
   public statusCode: number;
@@ -45,19 +47,20 @@ export async function getCachedOrFetchCsrfToken(forceFresh = false): Promise<str
 
   isFetchingCsrfToken = (async () => {
     try {
-      const res = await fetch("/api/method/agency_tracking.api.auth.read?op=get_csrf_token", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "Accept": "application/json",
-        },
-      });
+      const ask = (url: string) =>
+        fetch(url, { method: "GET", credentials: "include", headers: { Accept: "application/json" } });
+      let res = v1Missing ? null : await ask("/v1/csrf-token");
+      if (!res || (res.status === 404 && !(res.headers.get("content-type") || "").includes("problem+json"))) {
+        if (res) v1Missing = true; // a backend without /v1
+        res = await ask("/api/method/agency_tracking.api.auth.read?op=get_csrf_token");
+      }
 
       if (res.ok) {
         const json = await res.json();
         const token =
-          (typeof json.message === "string" ? json.message : json.message?.csrf_token) ||
-          json.csrf_token ||
+          (typeof json === "string" ? json : null) ||
+          (typeof json?.message === "string" ? json.message : json?.message?.csrf_token) ||
+          json?.csrf_token ||
           null;
         if (token) {
           cachedCsrfToken = token;
@@ -85,10 +88,41 @@ export function clearCsrfToken() {
 }
 
 interface RequestV2Options {
-  method?: "POST" | "GET";
+  method?: "POST" | "GET" | "PUT" | "PATCH" | "DELETE";
   body?: Record<string, any> | FormData;
   headers?: Record<string, string>;
   isMultipart?: boolean;
+  /** For a /v1 list route: answer the whole body (e.g. items and total), not just its items. */
+  raw?: boolean;
+  /** Send to the old route as written, without /v1 (for a backend that has no /v1). */
+  legacy?: boolean;
+}
+
+/**
+ * Whether the backend serves /v1. Until a backend with /v1 is deployed, a translated call meets a
+ * plain 404 (no problem+json); from then on this session uses the old routes, so the frontend works
+ * with either backend.
+ */
+let v1Missing = false;
+export function isV1Unavailable(): boolean {
+  return v1Missing;
+}
+
+/**
+ * Arguments a /v1 route does not take, by operation. Kept so a test run (and the console in
+ * development) shows every argument the backend no longer reads.
+ */
+function reportDropped(op: string, dropped: string[]) {
+  if (typeof window === "undefined") return;
+  const w = window as any;
+  const seen: Record<string, string[]> = (w.__v1Dropped ||= {});
+  const before = new Set(seen[op] || []);
+  const fresh = dropped.filter((d) => !before.has(d));
+  if (!fresh.length) return;
+  seen[op] = [...before, ...fresh];
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[V2 Client] /v1 ${op} does not take: ${fresh.join(", ")}`);
+  }
 }
 
 /**
@@ -106,17 +140,44 @@ export async function requestV2<T = any>(
     );
   }
 
-  const method = options.method || "POST";
+  let method: string = options.method || "POST";
+  let url = endpoint;
+  let payload = options.body;
+  let answerField: string | undefined;
+  let isV1 = endpoint.startsWith("/v1/");
+  let translated = false;
+  if (!isV1 && !v1Missing && !options.legacy) {
+    let call;
+    try {
+      call = toV1Call(endpoint, payload);
+    } catch (err: any) {
+      throw new ApiV2Error(String(err?.message || err), 400, "ValidationError");
+    }
+    if (call) {
+      isV1 = true;
+      translated = true;
+      url = call.url;
+      method = call.method;
+      payload = call.body;
+      answerField = call.answer;
+      if (call.dropped.length) reportDropped(call.op, call.dropped);
+    } else if (process.env.NODE_ENV !== "production") {
+      console.warn(`[V2 Client] no /v1 route for ${endpoint}; using the old route`);
+    }
+  }
+
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...options.headers,
   };
 
-  // Attach CSRF token on POST requests if not logging in or fetching CSRF token
+  // Attach the CSRF token to every state-changing request but a login or the token fetch itself.
+  const isLogin = url === "/v1/login" || endpoint.endsWith("login");
   if (
-    method === "POST" &&
-    !endpoint.endsWith("login") &&
-    !endpoint.includes("get_csrf_token")
+    method !== "GET" &&
+    !isLogin &&
+    !endpoint.includes("get_csrf_token") &&
+    url !== "/v1/csrf-token"
   ) {
     const csrfToken = await getCachedOrFetchCsrfToken();
     if (csrfToken) {
@@ -126,10 +187,8 @@ export async function requestV2<T = any>(
 
   // Each endpoint serves several operations, named by `op`. A GET keeps `op` in the query
   // string; a POST sends it in the body, because the server reads only the body of a JSON POST.
-  let url = endpoint;
-  let payload = options.body;
   const queryStart = endpoint.indexOf("?");
-  if (method !== "GET" && queryStart !== -1) {
+  if (!isV1 && method !== "GET" && queryStart !== -1) {
     const params = new URLSearchParams(endpoint.slice(queryStart + 1));
     const op = params.get("op");
     if (op) {
@@ -190,6 +249,13 @@ export async function requestV2<T = any>(
 
   // Handle binary streams (e.g. XLSX export, PDF invoice)
   const contentType = response.headers.get("content-type") || "";
+
+  // A /v1 route the backend doesn't have: a plain 404, not a problem+json "record not found".
+  if (translated && response.status === 404 && !contentType.includes("problem+json")) {
+    v1Missing = true;
+    console.warn("[V2 Client] the backend has no /v1 routes; using the old routes");
+    return requestV2<T>(endpoint, { ...options, legacy: true });
+  }
   const contentDisposition = response.headers.get("content-disposition") || "";
   const isBinaryResponse =
     contentType.includes("application/vnd.openxmlformats") ||
@@ -250,6 +316,7 @@ export async function requestV2<T = any>(
   // Auto-heal on CSRFTokenError: purge cache, fetch fresh CSRF token, and retry once
   if (
     (jsonResponse?.exc_type === "CSRFTokenError" ||
+      jsonResponse?.kind === "CSRFTokenError" ||
       (response.status === 400 && String(jsonResponse?._server_messages || "").includes("Invalid Request"))) &&
     !(options as any)._isRetry &&
     !endpoint.endsWith("login") &&
@@ -298,6 +365,11 @@ export async function requestV2<T = any>(
       } catch {
         errorMsg = jsonResponse._server_messages;
       }
+    }
+
+    // 1b. A /v1 error (problem+json): `detail` is the message for the user, `kind` the error type
+    if (!errorMsg && isV1 && typeof jsonResponse?.detail === "string" && jsonResponse.detail) {
+      errorMsg = jsonResponse.detail;
     }
 
     // 2. Try message field
@@ -368,10 +440,18 @@ export async function requestV2<T = any>(
     throw new ApiV2Error(
       errorMsg,
       response.status,
-      jsonResponse?.exc_type,
+      jsonResponse?.exc_type || (isV1 ? jsonResponse?.kind : undefined),
       jsonResponse?._server_messages,
       jsonResponse
     );
+  }
+
+  // A /v1 answer is the operation's answer itself (a list route's in `items`).
+  if (isV1) {
+    if (answerField && !options.raw && jsonResponse && typeof jsonResponse === "object" && answerField in jsonResponse) {
+      return jsonResponse[answerField] as T;
+    }
+    return jsonResponse as T;
   }
 
   // Return unpacked message payload or entire response

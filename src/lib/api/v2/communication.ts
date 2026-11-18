@@ -133,6 +133,20 @@ export async function getThreadMessagesV2(threadName: string): Promise<V2ChatMes
     if (Array.isArray((result as any).participants)) participants = (result as any).participants;
   }
 
+  // Read receipts come from the participants (who read up to when). /v1 answers the messages
+  // alone, so ask for them alongside.
+  if (participants.length === 0) {
+    try {
+      const parts = await requestV2<any>("/api/method/agency_tracking.api.chat.read?op=get_thread_participants", {
+        method: "POST",
+        body: { thread_name: threadName },
+      });
+      participants = Array.isArray(parts) ? parts : Array.isArray(parts?.participants) ? parts.participants : [];
+    } catch {
+      // No receipts; the messages still show.
+    }
+  }
+
   (messages as any).participants = participants;
   return messages;
 }

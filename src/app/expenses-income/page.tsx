@@ -90,9 +90,10 @@ export default function ExpensesIncomePage() {
   const isAdminOrManager = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager"].includes(r)
   );
-  const isFinanceManagerOrAdmin = userRoles.some((r) =>
-    ["administrator", "system manager", "admin", "manager", "finance manager"].includes(r)
-  );
+  // Same roles as the backend: Finance Manager and Admin approve, reconcile and see their logs approved at once.
+  const isFinanceManagerOrAdmin = userRoles.some((r) => ["administrator", "admin", "finance manager"].includes(r));
+  // FX rates and the batch list also open to System Manager.
+  const isFinanceWriter = isFinanceManagerOrAdmin || userRoles.includes("system manager");
   const isFinanceReadOnly = !can("manageFinance");
 
   // Birr conversion switch (false on this system)
@@ -162,7 +163,7 @@ export default function ExpensesIncomePage() {
     queryKey: ["v2_available_batches_for_reconciliation"],
     queryFn: () => listCommissionBatchesV2(),
     staleTime: 30000,
-    enabled: isFinanceManagerOrAdmin,
+    enabled: isFinanceWriter,
   });
 
   // Bank Statement Lines State & Queries
@@ -2034,7 +2035,7 @@ export default function ExpensesIncomePage() {
         <FxRateModal
           isOpen={isFxModalOpen}
           onClose={() => setIsFxModalOpen(false)}
-          canMutate={isFinanceManagerOrAdmin}
+          canMutate={isFinanceWriter}
           onSuccess={() => {
             refetchLedger();
             refetchQueue();

@@ -87,6 +87,8 @@ export default function AgentWakalaRequestsPage() {
   const { data: contractorsList = [] } = useQuery({
     queryKey: ["v2_contractors_list_for_wakala"],
     queryFn: () => listContractorsV2(),
+    // Staff previewing the page pick an agency; an agency is its own (the list refuses it with 403).
+    enabled: !(authUser?.roles || []).some((r: string) => /foreign agency|agent/i.test(r)),
     staleTime: 60000,
   });
 

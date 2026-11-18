@@ -47,6 +47,7 @@ import { getApplicantV2, updateApplicantV2, V2ApplicantDetails } from "@/lib/api
 import {
   getPlacementV2,
   listPlacementsV2,
+  listPlacementsForApplicantV2,
   listMyPlacementsV2,
   uploadContractV2,
   uploadPlacementContractV2,
@@ -67,6 +68,7 @@ import {
   V2ContractExtractionMetadata,
 } from "@/lib/api/v2/documents";
 import { cn } from "@/lib/utils";
+import { shortRef } from "@/lib/utils/display-id";
 
 /**
  * Extracts only valid, non-null, non-empty, non-zero values from a source object,
@@ -208,27 +210,17 @@ export default function PlacementDocumentCenterPage() {
         }
       }
 
-      // Priority 3: Server-side filtered query via listPlacementsV2
+      // Priority 3: Placements filtered to this applicant (server filter + client check)
       try {
-        const filtered = await listPlacementsV2([{ applicant: cleanApplicantId }]);
-        if (Array.isArray(filtered) && filtered.length > 0) {
+        const filtered = await listPlacementsForApplicantV2(cleanApplicantId);
+        if (filtered.length > 0) {
           return filtered;
         }
       } catch {
         // Fall through
       }
 
-      // Priority 4: Direct list_placements with { applicant: cleanApplicantId } object filter
-      try {
-        const filtered = await listPlacementsV2({ applicant: cleanApplicantId });
-        if (Array.isArray(filtered) && filtered.length > 0) {
-          return filtered;
-        }
-      } catch {
-        // Fall through
-      }
-
-      // Priority 5: Fallback to listMyPlacementsV2 for Foreign Agency
+      // Priority 4: Fallback to listMyPlacementsV2 for Foreign Agency
       try {
         const myPlacements = await listMyPlacementsV2();
         const matched = myPlacements.filter(
@@ -241,7 +233,7 @@ export default function PlacementDocumentCenterPage() {
         // Fall through
       }
 
-      // Priority 6: Unfiltered listPlacementsV2 with case-insensitive match
+      // Priority 5: Unfiltered listPlacementsV2 with case-insensitive match
       try {
         const all = await listPlacementsV2(undefined, 250);
         const matched = all.filter(
@@ -393,27 +385,17 @@ export default function PlacementDocumentCenterPage() {
       }
     }
 
-    // 6. Server-side filtered query via listPlacementsV2
+    // 6. Placements filtered to this applicant (server filter + client check)
     try {
-      const filtered = await listPlacementsV2([{ applicant: cleanApplicantId }]);
-      if (Array.isArray(filtered) && filtered.length > 0) {
+      const filtered = await listPlacementsForApplicantV2(cleanApplicantId);
+      if (filtered.length > 0) {
         return filtered.find((p) => p.status !== "Cancelled") || filtered[0];
       }
     } catch {
       // Fall through
     }
 
-    // 7. Server-side filtered query via listPlacementsV2 with object
-    try {
-      const filtered = await listPlacementsV2({ applicant: cleanApplicantId });
-      if (Array.isArray(filtered) && filtered.length > 0) {
-        return filtered.find((p) => p.status !== "Cancelled") || filtered[0];
-      }
-    } catch {
-      // Fall through
-    }
-
-    // 8. Foreign Agency listMyPlacementsV2
+    // 7. Foreign Agency listMyPlacementsV2
     try {
       const myPlacements = await listMyPlacementsV2();
       const matched = myPlacements.filter(
@@ -428,7 +410,7 @@ export default function PlacementDocumentCenterPage() {
       // Fall through
     }
 
-    // 9. Unfiltered listPlacementsV2 fallback
+    // 8. Unfiltered listPlacementsV2 fallback
     try {
       const all = await listPlacementsV2(undefined, 250);
       const matched = all.filter(
@@ -1180,7 +1162,7 @@ export default function PlacementDocumentCenterPage() {
           <span className="text-[10px] uppercase font-bold text-slate-400">Placement:</span>
           {activePlacement ? (
             <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-              {activePlacement.name}
+              {shortRef(activePlacement.name)}
             </span>
           ) : (
             <span className="text-amber-700 dark:text-amber-400 font-semibold">
@@ -1287,7 +1269,7 @@ export default function PlacementDocumentCenterPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const url = contractPreviewUrl || previewFileUrl;
+                          const url = getFileDownloadUrl(contractPreviewUrl || previewFileUrl);
                           const win = window.open(url, "_blank");
                           win?.focus();
                         }}

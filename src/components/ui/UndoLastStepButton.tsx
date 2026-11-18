@@ -118,7 +118,8 @@ export function UndoLastStepButton({
           }`
       );
       // Invalidate relevant queries so the full record is reloaded from API
-      queryClient.invalidateQueries({ queryKey: ["undoable_step", doctype, name] });
+      // Every Undo button on the page asks again: undoing one step makes the step before it undoable.
+      queryClient.invalidateQueries({ queryKey: ["undoable_step"] });
       queryClient.invalidateQueries({ queryKey: ["applicant"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       queryClient.invalidateQueries({ queryKey: ["placement"] });

@@ -1,5 +1,6 @@
 "use client";
 
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -24,7 +25,7 @@ import {
   Info,
   Inbox,
 } from "lucide-react";
-import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { getApplicantV2, listPlacementsForApplicantV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import {
   restartApplicantV2,
   cancelApplicantV2,
@@ -108,7 +109,7 @@ export default function ApplicantDetailPage() {
 
   const { data: placements = [], refetch: refetchPlacements } = useQuery({
     queryKey: ["placements", applicantId],
-    queryFn: () => listPlacementsV2([{ applicant: applicantId }]),
+    queryFn: () => listPlacementsForApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 
@@ -293,14 +294,7 @@ export default function ApplicantDetailPage() {
       toast.success(data?.message || "Applicant process successfully restored to previous state.");
     },
     onError: (err: any) => {
-      const msg = err?.message || String(err);
-      if (err?.statusCode === 404 || msg.includes("not found") || msg.includes("does not exist") || err?.statusCode === 501) {
-        setRestoreErrorNotice(
-          "Backend Restoration Endpoint ('applicant_api.restore_applicant') is not yet available on the active backend. To resume workflow, internal staff can either 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
-        );
-      } else {
-        toast.error("Restoration failed", { description: msg });
-      }
+      toast.error("Restoration failed", { description: err?.message || String(err) });
     },
   });
 
@@ -353,6 +347,10 @@ export default function ApplicantDetailPage() {
       ["Admin", "Manager", "System Manager", "Administrator"].includes(role)
     );
   }, [authUser]);
+
+  // A user whose every role is view-only gets no Cancel / Restore / Restart buttons. Anyone with a
+  // writable role still sees them; the backend decides whether that role may do it.
+  const canChangeCase = isManagerOrAdmin || !isReadOnly();
 
   const canSelectForAgency = React.useMemo(() => {
     if (!isManagerOrAdmin) return false;
@@ -543,7 +541,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Cancelled Applicant Actions: Restore Previous Process vs Restart as New Attempt */}
-            {currentStage === "Cancelled" && (
+            {currentStage === "Cancelled" && canChangeCase && (
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -572,7 +570,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Send Again button for International return */}
-            {isInternationalReturn && currentStage !== "Cancelled" && (
+            {isInternationalReturn && currentStage !== "Cancelled" && canChangeCase && (
               <Button
                 type="button"
                 size="sm"
@@ -606,7 +604,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Cancel Applicant button (when not already cancelled) */}
-            {currentStage !== "Cancelled" && (
+            {currentStage !== "Cancelled" && canChangeCase && (
               <Button
                 type="button"
                 variant="outline"
@@ -719,7 +717,7 @@ export default function ApplicantDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <a
-                href={activeVideoPlayUrl || candidateVideoUrl}
+                href={getFileDownloadUrl(activeVideoPlayUrl || candidateVideoUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"

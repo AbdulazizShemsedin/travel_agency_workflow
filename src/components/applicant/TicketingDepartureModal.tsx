@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ticket,
   Plane,
@@ -35,6 +36,7 @@ import {
   undoFlightOutcomeV2,
   undoRescheduleV2,
   clearPredepartureMedicalResultV2,
+  getPlacementV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
@@ -52,13 +54,24 @@ interface TicketingDepartureModalProps {
 export function TicketingDepartureModal({
   isOpen,
   onClose,
-  placement,
+  placement: placementProp,
   applicantName,
   initialTab = "ticket",
   onSuccess,
 }: TicketingDepartureModalProps) {
   const [activeTab, setActiveTab] = React.useState<"ticket" | "reschedule" | "medical2" | "departure">(initialTab);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const queryClient = useQueryClient();
+
+  // The placement as it is now: the row the window was opened from can be minutes old, and every
+  // step here (ticket, Medical 2, departure) changes it.
+  const { data: freshPlacement, refetch: refetchPlacement } = useQuery({
+    queryKey: ["placement", placementProp?.name],
+    queryFn: () => getPlacementV2(placementProp!.name),
+    enabled: isOpen && Boolean(placementProp?.name),
+    staleTime: 0,
+  });
+  const placement = (freshPlacement && freshPlacement.name === placementProp?.name ? freshPlacement : placementProp) as V2PlacementRecord;
 
   React.useEffect(() => {
     setActiveTab(initialTab);
@@ -86,7 +99,23 @@ export function TicketingDepartureModal({
   const [medical2ExamDate, setMedical2ExamDate] = React.useState(new Date().toISOString().split("T")[0]);
   const [isUnfitConfirmOpen, setIsUnfitConfirmOpen] = React.useState(false);
 
-  if (!placement) return null;
+  // The form shows this placement's saved ticket (the window is mounted once and reused for every row).
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setTicketNumber(placement?.ticket_number || "");
+    setFlightDate(placement?.flight_date || "");
+    setFlightTime((placement as any)?.flight_time || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, placement?.name, placement?.ticket_number, placement?.flight_date, (placement as any)?.flight_time]);
+
+  // After any change here: this window, the tables and the Undo buttons read the new state.
+  const afterChange = async () => {
+    await refetchPlacement();
+    queryClient.invalidateQueries({ queryKey: ["placement"] });
+    queryClient.invalidateQueries({ queryKey: ["placements"] });
+    queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+    onSuccess?.();
+  };
 
   const visaDeadline = (placement as any)?.visa_deadline || (placement as any)?.visa_valid_until;
   const visaDeadlineInfo = React.useMemo(() => {
@@ -100,6 +129,9 @@ export function TicketingDepartureModal({
     );
     return { deadline: visaDeadline, diffDays };
   }, [visaDeadline]);
+
+  // After every hook: a hook below an early return runs on some renders only (React's hook order).
+  if (!placement) return null;
 
   // 1. Record Ticket Details
   const handleRecordTicket = async (e: React.FormEvent) => {
@@ -122,11 +154,23 @@ export function TicketingDepartureModal({
       if (res?.warning) {
         toast.warning("Warning", { description: res.warning });
       }
-      toast.success("Ticket Details Recorded", {
-        description: res?.message || `Flight details logged for candidate ${applicantName}. Stage moved to Ticketed.`,
-      });
-      onSuccess?.();
-      setActiveTab("medical2");
+      // Saving the ticket does not move the case; Stamped -> Ticketed is its own step.
+      let moved = placement.status !== "Stamped";
+      if (!moved) {
+        try {
+          await advancePlacementV2(placement.name, "Ticketed");
+          moved = true;
+        } catch (advErr: any) {
+          toast.error("Ticket saved, but the case did not move to Ticketed", { description: advErr?.message });
+        }
+      }
+      if (moved) {
+        toast.success("Ticket Details Recorded", {
+          description: placement.status === "Stamped" ? `Flight details saved for ${applicantName}. Stage moved to Ticketed.` : `Flight details saved for ${applicantName}.`,
+        });
+      }
+      await afterChange();
+      if (moved) setActiveTab("medical2");
     } catch (err: any) {
       toast.error("Ticketing Failed", {
         description: err?.message || "Failed to record ticket details. Please try again.",
@@ -164,7 +208,7 @@ export function TicketingDepartureModal({
       toast.success("Flight Reschedule Recorded", {
         description: res?.message || `Flight rescheduled to ${rescheduleDate}.`,
       });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Reschedule Failed", {
@@ -181,7 +225,7 @@ export function TicketingDepartureModal({
     try {
       await undoRescheduleV2(placement.name);
       toast.success("Reschedule Undone", { description: "Flight details restored to earlier flight." });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Failed to undo reschedule", { description: err?.message });
@@ -196,7 +240,7 @@ export function TicketingDepartureModal({
     try {
       await clearPredepartureMedicalResultV2(placement.name);
       toast.success("Medical 2 Cleared", { description: "Pre-departure medical screening result reset." });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Failed to clear medical result", { description: err?.message });
@@ -213,7 +257,7 @@ export function TicketingDepartureModal({
       toast.success("Local Return Recorded", {
         description: "Candidate did not board flight. Case remains Ticketed until rescheduled.",
       });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Failed to record Local return", { description: err?.message });
@@ -241,7 +285,7 @@ export function TicketingDepartureModal({
           ? "Candidate returned within 90 days. A replacement is owed."
           : "Candidate returned 90 days or more after departure. No replacement owed.",
       });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Failed to record International return", { description: err?.message });
@@ -256,7 +300,7 @@ export function TicketingDepartureModal({
     try {
       await undoFlightOutcomeV2(placement.name);
       toast.success("Flight Outcome Undone");
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Failed to undo flight outcome", { description: err?.message });
@@ -273,7 +317,7 @@ export function TicketingDepartureModal({
       toast.success("Medical 2 Recorded", {
         description: res?.message || `Pre-departure medical status set to ${medical2Status}.`,
       });
-      onSuccess?.();
+      await afterChange();
       if (medical2Status === "FIT") {
         setActiveTab("departure");
       } else {
@@ -311,7 +355,7 @@ export function TicketingDepartureModal({
       toast.success("Placement Departed", {
         description: res?.message || `Candidate officially Departed. 90-day free-replacement window anchored.`,
       });
-      onSuccess?.();
+      await afterChange();
       onClose();
     } catch (err: any) {
       toast.error("Departure Clearance Failed", {
@@ -592,7 +636,7 @@ export function TicketingDepartureModal({
                 Pre-Departure Medical 2 Screening (~72h before flight)
               </div>
               <p className="text-slate-600 dark:text-zinc-400 text-[11px]">
-                Final medical fitness screening prior to airport departure. UNFIT status automatically terminates and cancels both the candidate and placement.
+                Final medical fitness screening prior to airport departure. UNFIT holds the case at Ticketed (it is not cancelled) until the result is cleared or the case is dealt with.
               </p>
             </div>
 

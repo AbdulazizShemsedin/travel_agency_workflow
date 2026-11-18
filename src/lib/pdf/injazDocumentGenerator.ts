@@ -5,6 +5,7 @@
  */
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 
 // ---------------------------------------------------------------------------
 // Code-128 barcode generator (canvas-based, client-side only)
@@ -216,7 +217,8 @@ async function fetchImageBytes(url?: string): Promise<Uint8Array | null> {
       cleanUrl = `/${cleanUrl}`;
     }
 
-    // 4. Fetch with credentials for /private/files/
+    // 4. A stored file ID goes through the download address; fetch with the session.
+    cleanUrl = getFileDownloadUrl(cleanUrl) || cleanUrl;
     const res = await fetch(cleanUrl, { credentials: "include" });
     if (!res.ok) {
       console.warn(`Failed to fetch applicant photo from ${cleanUrl}: HTTP ${res.status}`);

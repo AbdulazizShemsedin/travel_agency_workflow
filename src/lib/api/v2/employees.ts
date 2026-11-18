@@ -312,7 +312,7 @@ export async function createEmployeeApiV2(payload: {
         ...(payload.phone?.trim() ? { phone: payload.phone.trim() } : {}),
         ...(payload.password?.trim() ? { password: payload.password.trim() } : {}),
         roles: payload.roles,
-        send_welcome_email: payload.send_welcome_email ?? false,
+        // No welcome email: the backend never sends one (it creates the user with it off).
       },
     }
   );

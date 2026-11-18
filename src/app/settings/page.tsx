@@ -235,6 +235,8 @@ export default function SettingsPage() {
     r2_secret_access_key: "",
   });
 
+  // The Go backend takes R2 from the server's environment only and sends read_only.
+  const storageReadOnly = !!storageSettings?.read_only;
   const [testResult, setTestResult] = React.useState<V2StorageConnectionStatus | null>(null);
   const [isTestingStorage, setIsTestingStorage] = React.useState(false);
 
@@ -994,6 +996,7 @@ export default function SettingsPage() {
                     )}
                     Test Connection
                   </Button>
+                  {!storageReadOnly && (
                   <Button
                     type="button"
                     size="sm"
@@ -1008,6 +1011,7 @@ export default function SettingsPage() {
                     )}
                     Save Storage Settings
                   </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1039,6 +1043,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-semibold">R2 Account ID</Label>
                   <Input
                     value={storageForm.r2_account_id}
+                    readOnly={storageReadOnly}
                     onChange={(e) => setStorageForm({ ...storageForm, r2_account_id: e.target.value.trim() })}
                     placeholder="e.g. 5a1b2c3d4e5f..."
                     className="h-8 text-xs font-mono"
@@ -1050,6 +1055,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-semibold">R2 Bucket Name</Label>
                   <Input
                     value={storageForm.r2_bucket_name}
+                    readOnly={storageReadOnly}
                     onChange={(e) => setStorageForm({ ...storageForm, r2_bucket_name: e.target.value.trim() })}
                     placeholder="e.g. travel-agency-documents"
                     className="h-8 text-xs font-mono"
@@ -1060,6 +1066,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-semibold">Public URL Base (must begin with https://)</Label>
                   <Input
                     value={storageForm.r2_public_url_base}
+                    readOnly={storageReadOnly}
                     onChange={(e) => setStorageForm({ ...storageForm, r2_public_url_base: e.target.value.trim() })}
                     placeholder="https://pub-abc123xyz.r2.dev"
                     className="h-8 text-xs font-mono"
@@ -1070,6 +1077,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-semibold">R2 Access Key ID</Label>
                   <Input
                     value={storageForm.r2_access_key_id}
+                    readOnly={storageReadOnly}
                     onChange={(e) => setStorageForm({ ...storageForm, r2_access_key_id: e.target.value.trim() })}
                     placeholder="e.g. 8f7e6d5c4b3a..."
                     className="h-8 text-xs font-mono"
@@ -1083,6 +1091,7 @@ export default function SettingsPage() {
                       {storageSettings?.secret_key_set ? "Secret Key Set" : "Not Set"}
                     </Badge>
                   </div>
+                  {!storageReadOnly && (
                   <Input
                     type="password"
                     value={storageForm.r2_secret_access_key}
@@ -1090,6 +1099,7 @@ export default function SettingsPage() {
                     placeholder={storageSettings?.secret_key_set ? "•••••••••••• (Leave blank to keep current secret)" : "Enter R2 Secret Access Key"}
                     className="h-8 text-xs font-mono"
                   />
+                  )}
                 </div>
               </div>
 
@@ -1098,11 +1108,19 @@ export default function SettingsPage() {
                   <KeyRound className="h-3.5 w-3.5" />
                   Cloudflare R2 Setup Instructions
                 </div>
+                {storageReadOnly ? (
+                <p className="text-[11px] text-blue-800 dark:text-blue-300">
+                  Storage is set on the server itself, not on this screen: the R2_ACCOUNT_ID, R2_BUCKET_NAME,
+                  R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY values in its environment. To change the bucket or keys,
+                  ask whoever runs the server. Test Connection checks what it uses now.
+                </p>
+                ) : (
                 <p className="text-[11px] text-blue-800 dark:text-blue-300">
                   1. Log into your Cloudflare Dashboard &rarr; <strong>R2</strong> &rarr; <strong>Manage R2 API Tokens</strong>.<br />
                   2. Create an API token with <strong>Object Read &amp; Write</strong> permissions.<br />
                   3. Copy your Account ID, Access Key ID, and Secret Access Key into the fields above.
                 </p>
+                )}
               </div>
             </CardContent>
           </Card>

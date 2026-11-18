@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx --test tests/**/*.test.ts"
+    "test": "npx tsx --test tests/**/*.test.ts",
+    "gen:v1-routes": "node scripts/gen-v1-routes.mjs",
+    "check:v1-calls": "node scripts/check-v1-calls.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",
@@ -22,6 +24,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-table": "^9.1.2",
     "@tanstack/react-virtual": "^3.14.9",
+    "centrifuge": "5.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

@@ -68,6 +68,8 @@ export interface V2StorageSettings {
   r2_access_key_id?: string;
   secret_key_set?: boolean;
   configured?: boolean;
+  /** Set by the Go backend: R2 comes from the server's environment and cannot be saved here. */
+  read_only?: boolean;
   [key: string]: any;
 }
 

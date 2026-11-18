@@ -43,9 +43,10 @@ import {
   undoForfeitInjazV2,
   forfeitInjazAndRestartV2,
   getInjazPaperV2,
+  setStepRemarksV2,
 } from "@/lib/api/v2/clearance";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
-import { updateApplicantForLmisV2, getApplicantV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import {
@@ -221,7 +222,7 @@ export function InjazWorkspace({
         ""
     );
 
-    setModalRemark(editingRow.remark || inj?.notes || inj?.rejection_remark || "");
+    setModalRemark(editingRow.teshirRemark || "");
     setModalEmployee(inj?.assigned_officer || inj?.employee || "");
     setModalTaeshirStatus(inj?.taeshir_status || (editingRow as any)?.taeshir_status || "");
 
@@ -317,14 +318,6 @@ export function InjazWorkspace({
 
     try {
       await setTaeshirAppointmentV2(stepName, appointmentDate, injazNo);
-      const candId = row.applicantId || row.applicantName || row.name;
-      if (injazNo && candId) {
-        try {
-          await updateApplicantV2(candId, { application_number: injazNo.trim() });
-        } catch (e) {
-          console.warn("Failed to sync application_number to applicant:", e);
-        }
-      }
       toast.success("Te'shir details saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
@@ -408,12 +401,12 @@ export function InjazWorkspace({
     }
   };
 
-  // In-cell quick update helper: Remark (Applicant.remarks)
+  // In-cell quick update helper: Remark (the Te'shir step's remark)
   const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
     try {
-      await updateApplicantV2(row.applicantId, {
-        remarks: remark,
-      });
+      const stepName = row.injaz?.name;
+      if (!stepName) throw new Error("No clearance step found for this candidate.");
+      await setStepRemarksV2(stepName, remark.trim());
       toast.success("Remark saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -533,26 +526,11 @@ export function InjazWorkspace({
           modalAppointmentDate || "",
           modalInjazNumber || ""
         );
-        if (modalInjazNumber && editingRow.applicantId) {
-          try {
-            await updateApplicantV2(editingRow.applicantId, {
-              application_number: modalInjazNumber.trim(),
-            });
-          } catch (e) {
-            console.warn("Failed to sync application_number to applicant:", e);
-          }
-        }
       }
 
-      // Update Remark on applicant record
-      if (modalRemark.trim()) {
-        try {
-          await updateApplicantV2(editingRow.applicantId, {
-            remarks: modalRemark.trim(),
-          });
-        } catch (err) {
-          console.warn("Remark update warning:", err);
-        }
+      // The remark belongs to the Te'shir step (the officer may not edit the applicant)
+      if (modalRemark.trim() !== (editingRow.teshirRemark || "").trim()) {
+        await setStepRemarksV2(editingRow.injaz?.name || stepName, modalRemark.trim());
       }
 
       // Update Taeshir follow-up status
@@ -714,10 +692,6 @@ export function InjazWorkspace({
             {row.fullName}
           </span>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400">
-              {row.applicantId}
-            </span>
-            <span className="text-[10px] text-slate-400">•</span>
             <span className="font-mono text-[10px] text-emerald-800 dark:text-emerald-400 font-semibold">
               {row.passportNumber}
             </span>
@@ -954,7 +928,7 @@ export function InjazWorkspace({
       editable: true,
       cell: (row) => (
         <ExcelTextInput
-          value={row.remark}
+          value={row.teshirRemark || ""}
           disabled={!canEdit}
           placeholder="Add remark..."
           onSave={(val) => handleUpdateRemark(row, val)}
