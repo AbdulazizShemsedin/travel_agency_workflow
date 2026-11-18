@@ -43,7 +43,8 @@ export interface V2CreateApplicantPayload {
   [key: string]: any;
 }
 
-export interface V2ApplicantDetails {
+export interface V2ApplicantDetails 
+{
   medical_current?: V2MedicalCurrent;
   name: string;
   full_name: string;

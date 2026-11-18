@@ -1,0 +1,84 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - production_version_non_mock
+      - az/go-frontend-integration
+  pull_request:
+    branches:
+      - main
+      - master
+      - production_version_non_mock
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Vercel Deployment Target'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - preview
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc)
+        run: npx tsc --noEmit
+
+      - name: Run automated test suite
+        run: npm test
+
+      - name: Determine Deployment Environment
+        id: env-step
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.environment }}" = "preview" ]; then
+              echo "environment=preview" >> $GITHUB_ENV
+              echo "prod_flag=" >> $GITHUB_ENV
+            else
+              echo "environment=production" >> $GITHUB_ENV
+              echo "prod_flag=--prod" >> $GITHUB_ENV
+            fi
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "environment=preview" >> $GITHUB_ENV
+            echo "prod_flag=" >> $GITHUB_ENV
+          else
+            echo "environment=production" >> $GITHUB_ENV
+            echo "prod_flag=--prod" >> $GITHUB_ENV
+          fi
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Configuration
+        run: vercel pull --yes --environment=${{ env.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build ${{ env.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy Project Artifacts to Vercel
+        run: vercel deploy --prebuilt ${{ env.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
+
