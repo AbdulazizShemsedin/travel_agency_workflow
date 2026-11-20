@@ -189,7 +189,11 @@ export function ExcelSelect({
   const selectRef = React.useRef<HTMLSelectElement>(null);
 
   const selectedOpt =
-    options.find((o) => o.value.toLowerCase() === currentVal.toLowerCase()) || options[0];
+    options.find(
+      (o) =>
+        o.value.toLowerCase() === currentVal.toLowerCase() ||
+        (o.value.toLowerCase().startsWith("complete") && currentVal.toLowerCase().startsWith("complete"))
+    ) || options[0];
 
   React.useEffect(() => {
     if (isEditing && selectRef.current) {

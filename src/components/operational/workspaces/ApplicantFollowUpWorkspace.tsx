@@ -85,10 +85,12 @@ import {
   advancePlacementV2,
   uploadPlacementVisaV2,
   updatePlacementParsedFieldsV2,
+  updatePlacementForLmisV2,
   setTicketingRemarksV2,
   recordFlightOutcomeV2,
 } from "@/lib/api/v2/placements";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { downloadInjazDocumentPDF, InjazCandidateData } from "@/lib/pdf/injazDocumentGenerator";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
@@ -345,12 +347,33 @@ export function ApplicantFollowUpWorkspace({
   const [teshirApptDateVal, setTeshirApptDateVal] = React.useState("");
   const [telesignRefNoVal, setTelesignRefNoVal] = React.useState("");
 
+  // Kuwait Placement LMIS direct editable fields
+  const [employerCity, setEmployerCity] = React.useState("");
+  const [employerHouseNo, setEmployerHouseNo] = React.useState("");
+  const [employerPhone, setEmployerPhone] = React.useState("");
+  const [employerAltPhone, setEmployerAltPhone] = React.useState("");
+  const [contractStartDate, setContractStartDate] = React.useState("");
+  const [contractEndDate, setContractEndDate] = React.useState("");
+  const [isPlacementLmisOpen, setIsPlacementLmisOpen] = React.useState(false);
+  const [isSavingPlacementLmis, setIsSavingPlacementLmis] = React.useState(false);
+
   // Embassy direct editable fields
   const [embassyVisaNumberVal, setEmbassyVisaNumberVal] = React.useState("");
   const [embassySubmissionDateVal, setEmbassySubmissionDateVal] = React.useState("");
   const [embassyVisaIssueDateVal, setEmbassyVisaIssueDateVal] = React.useState("");
   const [embassyVisaExpiryDateVal, setEmbassyVisaExpiryDateVal] = React.useState("");
   const [isAdvancingToProcessing, setIsAdvancingToProcessing] = React.useState(false);
+
+  // Kuwait Embassy eVisa direct fields
+  const [visaTypeVal, setVisaTypeVal] = React.useState("");
+  const [visaRefNoVal, setVisaRefNoVal] = React.useState("");
+  const [sponsorNameVal, setSponsorNameVal] = React.useState("");
+  const [sponsorCivilIdVal, setSponsorCivilIdVal] = React.useState("");
+  const [kuwaitAgencyNameVal, setKuwaitAgencyNameVal] = React.useState("");
+  const [kuwaitAgencyLicenseVal, setKuwaitAgencyLicenseVal] = React.useState("");
+
+  // CV Download state
+  const [isDownloadingCv, setIsDownloadingCv] = React.useState(false);
 
   // Ticket & Departure direct editable fields
   const [ticketNumberVal, setTicketNumberVal] = React.useState("");
@@ -415,17 +438,32 @@ export function ApplicantFollowUpWorkspace({
       syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id || (currentRow.injaz as any)?.reference_number, telesignRefNoVal, setTelesignRefNoVal);
       syncDate(currentRow.appointmentDate || currentRow.teshirAppointmentDate || currentRow.injaz?.appointment_date, teshirApptDateVal, setTeshirApptDateVal);
 
+      // Kuwait LMIS Placement fields
+      syncStr((currentRow.plc as any)?.employer_city, employerCity, setEmployerCity);
+      syncStr((currentRow.plc as any)?.employer_house_number, employerHouseNo, setEmployerHouseNo);
+      syncStr((currentRow.plc as any)?.employer_phone, employerPhone, setEmployerPhone);
+      syncStr((currentRow.plc as any)?.employer_alt_phone, employerAltPhone, setEmployerAltPhone);
+      syncDate((currentRow.plc as any)?.contract_start_date, contractStartDate, setContractStartDate);
+      syncDate((currentRow.plc as any)?.contract_end_date, contractEndDate, setContractEndDate);
+
       // Kuwait LMIS Police Ashara sub-check fields
-      syncStr(currentRow.lms?.police_ashara_status, policeAsharaStatus, setPoliceAsharaStatus);
-      syncDate(currentRow.lms?.police_ashara_appointment_date, policeAsharaApptDate, setPoliceAsharaApptDate);
-      syncStr(currentRow.lms?.police_ashara_amount ? String(currentRow.lms.police_ashara_amount) : "", policeAsharaAmount, setPoliceAsharaAmount);
-      syncStr(currentRow.lms?.police_ashara_remark, policeAsharaRemark, setPoliceAsharaRemark);
+      syncStr(currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus, policeAsharaStatus, setPoliceAsharaStatus);
+      syncDate(currentRow.lms?.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate, policeAsharaApptDate, setPoliceAsharaApptDate);
+      syncStr(currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark, policeAsharaRemark, setPoliceAsharaRemark);
 
       // Embassy direct fields
       syncStr(currentRow.visaNumber || currentRow.embassy?.visa_number || (currentRow.plc as any)?.visa_number, embassyVisaNumberVal, setEmbassyVisaNumberVal);
       syncDate(currentRow.submissionDate || (currentRow.embassy as any)?.date_submitted || (currentRow.embassy as any)?.submission_date || currentRow.embassy?.date_started, embassySubmissionDateVal, setEmbassySubmissionDateVal);
       syncDate(currentRow.visaIssueDate || (currentRow.plc as any)?.visa_issue_date || currentRow.embassy?.visa_issue_date, embassyVisaIssueDateVal, setEmbassyVisaIssueDateVal);
       syncDate(currentRow.visaDeadline || (currentRow.plc as any)?.visa_expiry_date || (currentRow.plc as any)?.visa_deadline || currentRow.embassy?.visa_valid_until || (currentRow.embassy as any)?.visa_expiry_date, embassyVisaExpiryDateVal, setEmbassyVisaExpiryDateVal);
+
+      // Kuwait Embassy eVisa direct fields
+      syncStr((currentRow.plc as any)?.visa_type || (currentRow.embassy as any)?.visa_type, visaTypeVal, setVisaTypeVal);
+      syncStr((currentRow.plc as any)?.visa_reference_number || (currentRow.embassy as any)?.visa_reference_number, visaRefNoVal, setVisaRefNoVal);
+      syncStr((currentRow.plc as any)?.sponsor_name || (currentRow.embassy as any)?.sponsor_name || (currentRow.plc as any)?.employer_name, sponsorNameVal, setSponsorNameVal);
+      syncStr((currentRow.plc as any)?.sponsor_civil_id || (currentRow.embassy as any)?.sponsor_civil_id || (currentRow.plc as any)?.employer_national_id, sponsorCivilIdVal, setSponsorCivilIdVal);
+      syncStr((currentRow.plc as any)?.kuwait_agency_name || (currentRow.embassy as any)?.kuwait_agency_name, kuwaitAgencyNameVal, setKuwaitAgencyNameVal);
+      syncStr((currentRow.plc as any)?.kuwait_agency_license || (currentRow.embassy as any)?.kuwait_agency_license, kuwaitAgencyLicenseVal, setKuwaitAgencyLicenseVal);
 
       // Ticket direct fields
       syncStr(currentRow.ticketNumber || (currentRow.plc as any)?.ticket_number, ticketNumberVal, setTicketNumberVal);
@@ -473,8 +511,9 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleDownloadCvPdf = async () => {
-    if (!currentRow?.applicantId) return;
+    if (!currentRow?.applicantId || isDownloadingCv) return;
     try {
+      setIsDownloadingCv(true);
       toast.info("Downloading candidate CV PDF...");
       const blob = await renderCvPdfV2(currentRow.applicantId);
       const url = window.URL.createObjectURL(blob);
@@ -488,6 +527,8 @@ export function ApplicantFollowUpWorkspace({
       toast.success("Candidate CV downloaded successfully!");
     } catch {
       window.open(`/applicants/${currentRow.applicantId}/cv`, "_blank");
+    } finally {
+      setIsDownloadingCv(false);
     }
   };
 
@@ -510,7 +551,11 @@ export function ApplicantFollowUpWorkspace({
   if ((!isOpen && !isFullPage) || !currentRow) return null;
 
   const placementName = currentRow.placementName || currentRow.placementId || activePlacementIdentifier;
-  const destinationCountry = currentRow.destinationCountry || "Saudi Arabia";
+  const destinationCountry =
+    currentRow.destinationCountry ||
+    currentRow.applicant?.destination_country ||
+    (currentRow.plc as any)?.destination_country ||
+    "Saudi Arabia";
   const isKuwait = destinationCountry.toLowerCase().includes("kuwait");
 
   // Robust step identifiers resolved from row or placementSteps
@@ -586,13 +631,15 @@ export function ApplicantFollowUpWorkspace({
 
   const isDepartureConfirmedFinished =
     ["departed"].includes(String(currentRow.placementStatus || "").toLowerCase()) ||
-    (currentRow.plc as any)?.status === "Departed";
+    (currentRow.plc as any)?.status === "Departed" ||
+    currentRow.departureStatus === "Departed";
 
   // Semantic aliases
   const isLmisComplete = isLmisConfirmedFinished;
   const isTeshirCompleted = isTeshirConfirmedFinished;
   const isEmbassyStamped = isEmbassyConfirmedFinished;
   const isDepartureComplete = isDepartureConfirmedFinished;
+  const isPlacementDeparted = isDepartureConfirmedFinished || currentRow.departureStatus === "Departed";
 
   // Plain values, not hooks: this runs after the early return above, where a hook would change React's hook order.
   const normalizedInjazPayment = (() => {
@@ -840,24 +887,29 @@ export function ApplicantFollowUpWorkspace({
       toast.error("Kuwait LMIS clearance step record not found.");
       return;
     }
+    if (policeAsharaStatus === "Failed" && !policeAsharaRemark.trim()) {
+      toast.error("A remark is required when Police Ashara status is Failed.");
+      return;
+    }
     try {
       setIsSavingPoliceAshara(true);
       await recordPoliceAsharaV2(lmsStepName, {
         police_ashara_status: policeAsharaStatus || "Pending",
         police_ashara_appointment_date: policeAsharaApptDate || undefined,
-        police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
-        police_ashara_remark: policeAsharaRemark || undefined,
+        police_ashara_remark: policeAsharaRemark.trim() || undefined,
       });
       toast.success("Kuwait Police Ashara details recorded successfully");
       setIsPoliceAsharaOpen(false);
       setCurrentRow((prev) => prev ? {
         ...prev,
+        policeAsharaStatus: policeAsharaStatus || "Pending",
+        policeAsharaAppointmentDate: policeAsharaApptDate || undefined,
+        policeAsharaRemark: policeAsharaRemark.trim() || undefined,
         lms: prev.lms ? {
           ...prev.lms,
           police_ashara_status: policeAsharaStatus || "Pending",
           police_ashara_appointment_date: policeAsharaApptDate || undefined,
-          police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
-          police_ashara_remark: policeAsharaRemark || undefined,
+          police_ashara_remark: policeAsharaRemark.trim() || undefined,
         } : prev.lms,
       } : null);
       refreshAll();
@@ -865,6 +917,72 @@ export function ApplicantFollowUpWorkspace({
       toast.error(formatCleanErrorMessage(err));
     } finally {
       setIsSavingPoliceAshara(false);
+    }
+  };
+
+  const handleSavePlacementLmis = async () => {
+    if (!placementName) {
+      toast.error("Placement record not found.");
+      return;
+    }
+    if (contractStartDate && contractEndDate && contractEndDate < contractStartDate) {
+      toast.error("Contract end date cannot be earlier than start date.");
+      return;
+    }
+    try {
+      setIsSavingPlacementLmis(true);
+      await updatePlacementForLmisV2(placementName, {
+        employer_city: employerCity.trim() || undefined,
+        employer_house_number: employerHouseNo.trim() || undefined,
+        employer_phone: employerPhone.trim() || undefined,
+        employer_alt_phone: employerAltPhone.trim() || undefined,
+        contract_start_date: contractStartDate || undefined,
+        contract_end_date: contractEndDate || undefined,
+      });
+      toast.success("Placement LMIS contract details updated successfully");
+      setIsPlacementLmisOpen(false);
+      setCurrentRow((prev) => prev ? {
+        ...prev,
+        plc: prev.plc ? {
+          ...prev.plc,
+          employer_city: employerCity.trim() || undefined,
+          employer_house_number: employerHouseNo.trim() || undefined,
+          employer_phone: employerPhone.trim() || undefined,
+          employer_alt_phone: employerAltPhone.trim() || undefined,
+          contract_start_date: contractStartDate || undefined,
+          contract_end_date: contractEndDate || undefined,
+        } : prev.plc,
+      } : null);
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setIsSavingPlacementLmis(false);
+    }
+  };
+
+  const handleSaveKuwaitEvisaField = async (fieldKey: string, value: string) => {
+    if (!placementName || !canEditEmbassy) return;
+    const val = value.trim();
+    try {
+      setSavingField((prev) => ({ ...prev, [fieldKey]: true }));
+      await updatePlacementParsedFieldsV2(placementName, {
+        [fieldKey]: val || undefined,
+      });
+      setCurrentRow((prev) => prev ? {
+        ...prev,
+        plc: prev.plc ? {
+          ...prev.plc,
+          [fieldKey]: val || undefined,
+        } : prev.plc,
+      } : null);
+      triggerSavedFeedback(fieldKey);
+      toast.success("eVisa field saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, [fieldKey]: false }));
     }
   };
 
@@ -1144,6 +1262,23 @@ export function ApplicantFollowUpWorkspace({
 
               {/* Right Stage & Navigation Controls */}
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isDownloadingCv}
+                  onClick={handleDownloadCvPdf}
+                  className="h-7 text-xs px-2.5 gap-1.5 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold cursor-pointer shadow-xs"
+                  title="Download Candidate CV PDF"
+                >
+                  {isDownloadingCv ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5 text-emerald-600" />
+                  )}
+                  <span>{isDownloadingCv ? "Downloading..." : "Download CV"}</span>
+                </Button>
+
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] uppercase font-bold text-slate-400 hidden sm:inline">Overall:</span>
                   <Badge className="bg-emerald-600 text-white font-bold text-[11px] uppercase px-2 py-0.5 shadow-2xs">
@@ -1266,48 +1401,46 @@ export function ApplicantFollowUpWorkspace({
                   {/* Card Body - 2-Column Grid */}
                   <div className="p-2.5 sm:p-3 space-y-2">
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      {/* Field 1: COC Status */}
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          COC Status
-                        </Label>
-                        {isKuwait ? (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-400 dark:text-zinc-500 text-xs">
-                            <span>— N/A (Kuwait)</span>
-                          </div>
-                        ) : canEditLmis && currentRow.applicantId ? (
-                          <select
-                            value={toClientCocStatus(currentRow.cocStatus) || "No COC"}
-                            onChange={async (e) => {
-                              const val = e.target.value;
-                              try {
-                                await updateApplicantForLmisV2({
-                                  applicant_name: currentRow.applicantId!,
-                                  coc_status: toBackendCocStatus(val),
-                                });
-                                toast.success(`COC status updated to ${val}`);
-                                setCurrentRow((prev) => (prev ? { ...prev, cocStatus: val } : null));
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className="w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-medium border-slate-200 dark:border-zinc-700"
-                          >
-                            <option value="">Select COC Status (Optional)...</option>
-                            {CLIENT_COC_STATUS_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-semibold text-slate-800 dark:text-zinc-200">
-                            <span>{toClientCocStatus(currentRow.cocStatus) || "No COC"}</span>
-                            {!canEditLmis && <Lock className="h-3 w-3 text-slate-400" />}
-                          </div>
-                        )}
-                      </div>
+                      {/* Field 1: COC Status (Saudi Only) */}
+                      {!isKuwait && (
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            COC Status
+                          </Label>
+                          {canEditLmis && currentRow.applicantId ? (
+                            <select
+                              value={toClientCocStatus(currentRow.cocStatus) || "No COC"}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                try {
+                                  await updateApplicantForLmisV2({
+                                    applicant_name: currentRow.applicantId!,
+                                    coc_status: toBackendCocStatus(val),
+                                  });
+                                  toast.success(`COC status updated to ${val}`);
+                                  setCurrentRow((prev) => (prev ? { ...prev, cocStatus: val } : null));
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
+                                }
+                              }}
+                              className="w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-medium border-slate-200 dark:border-zinc-700"
+                            >
+                              <option value="">Select COC Status (Optional)...</option>
+                              {CLIENT_COC_STATUS_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-semibold text-slate-800 dark:text-zinc-200">
+                              <span>{toClientCocStatus(currentRow.cocStatus) || "No COC"}</span>
+                              {!canEditLmis && <Lock className="h-3 w-3 text-slate-400" />}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Field 2: LMIS Status */}
                       <div className="space-y-0.5">
@@ -1506,42 +1639,161 @@ export function ApplicantFollowUpWorkspace({
                         </div>
                       )}
 
-                      {/* Kuwait LMIS Police Ashara sub-check */}
+                      {/* Kuwait LMIS Police Ashara sub-check & Placement Details */}
                       {isKuwait && (
-                        <div className="col-span-2 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300">
-                              Kuwait Police Ashara Sub-check
-                            </span>
-                            {canEditLmis && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setPoliceAsharaStatus(currentRow.lms?.police_ashara_status || "Pending");
-                                  setPoliceAsharaApptDate(currentRow.lms?.police_ashara_appointment_date || "");
-                                  setPoliceAsharaAmount(currentRow.lms?.police_ashara_amount ? String(currentRow.lms.police_ashara_amount) : "");
-                                  setPoliceAsharaRemark(currentRow.lms?.police_ashara_remark || "");
-                                  setIsPoliceAsharaOpen(true);
-                                }}
-                                className="h-5 text-[10px] px-2 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950 font-semibold cursor-pointer"
-                              >
-                                Manage Police Ashara
-                              </Button>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-slate-400 block text-[9px]">Appt Date:</span>
-                              <span className="font-mono font-semibold text-[11px]">{currentRow.lms?.police_ashara_appointment_date || "—"}</span>
+                        <>
+                          {/* Placement LMIS Contract Fields */}
+                          <div className="col-span-2 p-2.5 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/40 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[11px] text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                                Kuwait Employer & Placement LMIS Details
+                              </span>
+                              {canEditLmis && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEmployerCity((currentRow.plc as any)?.employer_city || "");
+                                    setEmployerHouseNo((currentRow.plc as any)?.employer_house_number || "");
+                                    setEmployerPhone((currentRow.plc as any)?.employer_phone || "");
+                                    setEmployerAltPhone((currentRow.plc as any)?.employer_alt_phone || "");
+                                    setContractStartDate(((currentRow.plc as any)?.contract_start_date || "").split(" ")[0]);
+                                    setContractEndDate(((currentRow.plc as any)?.contract_end_date || "").split(" ")[0]);
+                                    setIsPlacementLmisOpen(true);
+                                  }}
+                                  className="h-5 text-[10px] px-2 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950 font-semibold cursor-pointer"
+                                >
+                                  Edit Placement LMIS
+                                </Button>
+                              )}
                             </div>
-                            <div>
-                              <span className="text-slate-400 block text-[9px]">Status:</span>
-                              <span className="font-semibold text-[11px]">{currentRow.lms?.police_ashara_status || "Pending"}</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Employer City:</span>
+                                <span className="font-semibold text-[11px] truncate block">{(currentRow.plc as any)?.employer_city || employerCity || "—"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">House No:</span>
+                                <span className="font-semibold text-[11px] truncate block">{(currentRow.plc as any)?.employer_house_number || employerHouseNo || "—"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Employer Phone:</span>
+                                <span className="font-mono text-[11px] truncate block">{(currentRow.plc as any)?.employer_phone || employerPhone || "—"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Alt Phone:</span>
+                                <span className="font-mono text-[11px] truncate block">{(currentRow.plc as any)?.employer_alt_phone || employerAltPhone || "—"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Contract Start:</span>
+                                <span className="font-mono text-[11px] truncate block">{((currentRow.plc as any)?.contract_start_date || contractStartDate || "—").split(" ")[0]}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Contract End:</span>
+                                <span className="font-mono text-[11px] truncate block">{((currentRow.plc as any)?.contract_end_date || contractEndDate || "—").split(" ")[0]}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
+
+                          {/* Bilateral Paper Contract Document Status */}
+                          <div className="col-span-2 p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#16161d] flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-slate-500" />
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 block">
+                                  Bilateral Paper Contract:
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {Boolean((currentRow.plc as any)?.contract_file || (currentRow.plc as any)?.contract_file_url) ? (
+                                    <Badge variant="success" className="text-[10px] font-bold py-0 h-4">
+                                      Attached
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="warning" className="text-[10px] font-bold py-0 h-4">
+                                      Missing
+                                    </Badge>
+                                  )}
+                                  {((currentRow.plc as any)?.contract_file || (currentRow.plc as any)?.contract_file_url) && (
+                                    <a
+                                      href={getFileDownloadUrl((currentRow.plc as any)?.contract_file || (currentRow.plc as any)?.contract_file_url)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                                    >
+                                      View Contract
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Link
+                              href={`/applicants/${currentRow.applicantId}/contractor-doc`}
+                              className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
+                            >
+                              <span>Placement Doc Center</span>
+                              <ChevronRight className="h-3 w-3" />
+                            </Link>
+                          </div>
+
+                          {/* Police Ashara Sub-check */}
+                          <div className="col-span-2 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300">
+                                Kuwait Police Ashara Sub-check
+                              </span>
+                              {canEditLmis && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const lmsSource = (currentRow.lms || resolvedLmsStep || {}) as any;
+                                    setPoliceAsharaStatus(lmsSource.police_ashara_status || currentRow.policeAsharaStatus || "Pending");
+                                    setPoliceAsharaApptDate(lmsSource.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate || "");
+                                    setPoliceAsharaRemark(lmsSource.police_ashara_remark || currentRow.policeAsharaRemark || "");
+                                    setIsPoliceAsharaOpen(true);
+                                  }}
+                                  className="h-5 text-[10px] px-2 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950 font-semibold cursor-pointer"
+                                >
+                                  Manage Police Ashara
+                                </Button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Appt Date:</span>
+                                <span className="font-mono font-semibold text-[11px]">{currentRow.lms?.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate || "—"}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[9px]">Status:</span>
+                                <div>
+                                  <Badge
+                                    variant={
+                                      (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Completed"
+                                        ? "success"
+                                        : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Failed"
+                                        ? "destructive"
+                                        : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Scheduled"
+                                        ? "info"
+                                        : "warning"
+                                    }
+                                    className="text-[10px] font-bold py-0 h-4.5"
+                                  >
+                                    {currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus || "Pending"}
+                                  </Badge>
+                                </div>
+                              </div>
+                              {(currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark) && (
+                                <div className="col-span-2">
+                                  <span className="text-slate-400 block text-[9px]">Remark:</span>
+                                  <span className="text-slate-600 dark:text-zinc-400 text-[10px] italic">{currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1550,19 +1802,6 @@ export function ApplicantFollowUpWorkspace({
                 {/* Field 5: LMIS Actions */}
                 <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* CV / Dossier PDF Download */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadCvPdf}
-                      className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
-                      title="Download Candidate CV PDF"
-                    >
-                      <FileDown className="h-3 w-3 text-emerald-600" />
-                      <span>CV</span>
-                    </Button>
-
                     {/* Dispatch to Extension */}
                     <Button
                       type="button"
@@ -1656,9 +1895,9 @@ export function ApplicantFollowUpWorkspace({
                           TELESIGN (KUWAIT)
                         </h3>
                       </div>
-                      {(currentRow.teshirStatus === "Completed" || isTeshirCompleted || resolvedInjazStep?.status === "Complete") ? (
+                      {(currentRow.teshirStatus === "Completed" || currentRow.teshirStatus === "Complete" || isTeshirCompleted || resolvedInjazStep?.status === "Complete") ? (
                         <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d] py-0 h-4.5 px-2">
-                          COMPLETED
+                          COMPLETE
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 py-0 h-4.5 px-2">
@@ -1819,17 +2058,6 @@ export function ApplicantFollowUpWorkspace({
                   {/* Telesign Actions */}
                   <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDownloadCvPdf}
-                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold cursor-pointer"
-                        title="Download Candidate CV PDF"
-                      >
-                        <FileDown className="h-3 w-3 text-emerald-600" />
-                        <span>CV</span>
-                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -2468,63 +2696,146 @@ export function ApplicantFollowUpWorkspace({
                         )}
                       </div>
 
-                      {/* Field 2: Wakala Status Dropdown */}
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Wakala Status
-                        </Label>
-                        {isKuwait ? (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-400 dark:text-zinc-500 text-xs">
-                            <span>— N/A (Kuwait)</span>
-                          </div>
-                        ) : canEditEmbassy ? (
-                          <select
-                            value={
-                              currentRow.wakalaStatus?.toLowerCase() === "paid" ||
-                              currentRow.wakalaStatus?.toLowerCase() === "authorized"
-                                ? "Paid"
-                                : "Pending"
-                            }
-                            onChange={async (e) => {
-                              const val = e.target.value as "Paid" | "Pending";
-                              try {
-                                if (embassyStepName) {
-                                  await recordWakalaPaymentV2(embassyStepName, val);
-                                }
-                                toast.success(`Wakala status recorded as ${val}`);
-                                setCurrentRow((prev) => (prev ? { ...prev, wakalaStatus: val } : null));
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
-                              (currentRow.wakalaStatus?.toLowerCase() === "paid" ||
-                                currentRow.wakalaStatus?.toLowerCase() === "authorized")
-                                ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
-                                : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
-                            )}
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Paid">Paid</option>
-                          </select>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
-                            <Badge
-                              variant={
+                      {/* Field 2: Wakala Status Dropdown (Saudi Only - Completely excluded for Kuwait) */}
+                      {!isKuwait && (
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Wakala Status
+                          </Label>
+                          {canEditEmbassy ? (
+                            <select
+                              value={
                                 currentRow.wakalaStatus?.toLowerCase() === "paid" ||
                                 currentRow.wakalaStatus?.toLowerCase() === "authorized"
-                                  ? "success"
-                                  : "warning"
+                                  ? "Paid"
+                                  : "Pending"
                               }
-                              className="text-[10px] font-bold py-0 h-4.5"
+                              onChange={async (e) => {
+                                const val = e.target.value as "Paid" | "Pending";
+                                try {
+                                  if (embassyStepName) {
+                                    await recordWakalaPaymentV2(embassyStepName, val);
+                                  }
+                                  toast.success(`Wakala status recorded as ${val}`);
+                                  setCurrentRow((prev) => (prev ? { ...prev, wakalaStatus: val } : null));
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
+                                }
+                              }}
+                              className={cn(
+                                "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
+                                (currentRow.wakalaStatus?.toLowerCase() === "paid" ||
+                                  currentRow.wakalaStatus?.toLowerCase() === "authorized")
+                                  ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
+                                  : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                              )}
                             >
-                              {currentRow.wakalaStatus || "Pending"}
-                            </Badge>
+                              <option value="Pending">Pending</option>
+                              <option value="Paid">Paid</option>
+                            </select>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
+                              <Badge
+                                variant={
+                                  currentRow.wakalaStatus?.toLowerCase() === "paid" ||
+                                  currentRow.wakalaStatus?.toLowerCase() === "authorized"
+                                    ? "success"
+                                    : "warning"
+                                }
+                                className="text-[10px] font-bold py-0 h-4.5"
+                              >
+                                {currentRow.wakalaStatus || "Pending"}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Kuwait eVisa Ref No & Type */}
+                      {isKuwait && (
+                        <>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Visa Ref No.
+                              </Label>
+                              {savingField.visa_reference_number && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.visa_reference_number && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={visaRefNoVal}
+                                onChange={(e) => setVisaRefNoVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("visa_reference_number", visaRefNoVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("visa_reference_number", visaRefNoVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. REF-KW-8921"
+                                disabled={savingField.visa_reference_number}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{visaRefNoVal || (currentRow.plc as any)?.visa_reference_number || "—"}</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Visa Type
+                              </Label>
+                              {savingField.visa_type && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.visa_type && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={visaTypeVal}
+                                onChange={(e) => setVisaTypeVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("visa_type", visaTypeVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("visa_type", visaTypeVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. Work / Domestic"
+                                disabled={savingField.visa_type}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{visaTypeVal || (currentRow.plc as any)?.visa_type || "—"}</span>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
 
                       {/* Field 3: Submission Date */}
                       <div className="space-y-0.5">
@@ -2668,6 +2979,211 @@ export function ApplicantFollowUpWorkspace({
                           </div>
                         )}
                       </div>
+
+                      {/* Kuwait Sponsor & Foreign Agency Details */}
+                      {isKuwait && (
+                        <>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Sponsor Name
+                              </Label>
+                              {savingField.sponsor_name && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.sponsor_name && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={sponsorNameVal}
+                                onChange={(e) => setSponsorNameVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("sponsor_name", sponsorNameVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("sponsor_name", sponsorNameVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. Mohammed Al-Sabah"
+                                disabled={savingField.sponsor_name}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{sponsorNameVal || (currentRow.plc as any)?.sponsor_name || (currentRow.plc as any)?.employer_name || "—"}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Sponsor Civil ID
+                              </Label>
+                              {savingField.sponsor_civil_id && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.sponsor_civil_id && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={sponsorCivilIdVal}
+                                onChange={(e) => setSponsorCivilIdVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("sponsor_civil_id", sponsorCivilIdVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("sponsor_civil_id", sponsorCivilIdVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. 289012345678"
+                                disabled={savingField.sponsor_civil_id}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{sponsorCivilIdVal || (currentRow.plc as any)?.sponsor_civil_id || (currentRow.plc as any)?.employer_national_id || "—"}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Kuwait Agency Name
+                              </Label>
+                              {savingField.kuwait_agency_name && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.kuwait_agency_name && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={kuwaitAgencyNameVal}
+                                onChange={(e) => setKuwaitAgencyNameVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("kuwait_agency_name", kuwaitAgencyNameVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("kuwait_agency_name", kuwaitAgencyNameVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. Al-Diyar Manpower"
+                                disabled={savingField.kuwait_agency_name}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{kuwaitAgencyNameVal || (currentRow.plc as any)?.kuwait_agency_name || "—"}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                                Kuwait Agency License
+                              </Label>
+                              {savingField.kuwait_agency_license && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                </span>
+                              )}
+                              {savedField.kuwait_agency_license && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                  <Check className="h-3 w-3" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            {canEditEmbassy && placementName ? (
+                              <Input
+                                type="text"
+                                value={kuwaitAgencyLicenseVal}
+                                onChange={(e) => setKuwaitAgencyLicenseVal(e.target.value)}
+                                onBlur={() => handleSaveKuwaitEvisaField("kuwait_agency_license", kuwaitAgencyLicenseVal)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveKuwaitEvisaField("kuwait_agency_license", kuwaitAgencyLicenseVal);
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. LIC-KW-4421"
+                                disabled={savingField.kuwait_agency_license}
+                                className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
+                              />
+                            ) : (
+                              <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-900 dark:text-white">
+                                <span className="truncate">{kuwaitAgencyLicenseVal || (currentRow.plc as any)?.kuwait_agency_license || "—"}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Kuwait eVisa Document Attachment Status */}
+                          <div className="col-span-2 p-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#16161d] flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-teal-600" />
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 block">
+                                  Kuwait eVisa Document:
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {Boolean((currentRow.plc as any)?.visa_file || (currentRow.plc as any)?.visa_file_url) ? (
+                                    <Badge variant="success" className="text-[10px] font-bold py-0 h-4">
+                                      Attached
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="warning" className="text-[10px] font-bold py-0 h-4">
+                                      Missing
+                                    </Badge>
+                                  )}
+                                  {((currentRow.plc as any)?.visa_file || (currentRow.plc as any)?.visa_file_url) && (
+                                    <a
+                                      href={getFileDownloadUrl((currentRow.plc as any)?.visa_file || (currentRow.plc as any)?.visa_file_url)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[10px] text-teal-600 dark:text-teal-400 hover:underline font-semibold"
+                                    >
+                                      View eVisa
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Link
+                              href={`/applicants/${currentRow.applicantId}/contractor-doc`}
+                              className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
+                            >
+                              <span>Placement Doc Center</span>
+                              <ChevronRight className="h-3 w-3" />
+                            </Link>
+                          </div>
+                        </>
+                      )}
 
                       {/* Field 6: Embassy Status */}
                       <div className="space-y-0.5">
@@ -2953,7 +3469,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditDeparture && placementName ? (
+                        {canEditDeparture && placementName && !isPlacementDeparted ? (
                           <div className="relative">
                             <Input
                               type="text"
@@ -2982,8 +3498,11 @@ export function ApplicantFollowUpWorkspace({
                             )}
                           </div>
                         ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
-                            <span className="truncate">{ticketNumberVal || currentRow.ticketNumber || "—"}</span>
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-mono font-bold text-slate-900 dark:text-white">
+                            <span className="truncate">
+                              {ticketNumberVal || (currentRow.ticketNumber !== "—" ? currentRow.ticketNumber : "") || (currentRow.plc as any)?.ticket_number || "—"}
+                            </span>
+                            {isPlacementDeparted && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -2993,7 +3512,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Flight Date
                         </Label>
-                        {canEditDeparture && placementName ? (
+                        {canEditDeparture && placementName && !isPlacementDeparted ? (
                           <Input
                             type="date"
                             value={flightDateVal}
@@ -3020,8 +3539,9 @@ export function ApplicantFollowUpWorkspace({
                             className={cn("h-7 sm:h-7.5 px-2 text-xs font-mono", isTicketLocked && "cursor-not-allowed")}
                           />
                         ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-mono text-slate-800 dark:text-zinc-200">
                             <span className="truncate">{flightDateVal || currentRow.flightDate || "—"}</span>
+                            {isPlacementDeparted && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -3031,7 +3551,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Flight Time
                         </Label>
-                        {canEditDeparture ? (
+                        {canEditDeparture && !isPlacementDeparted ? (
                           <Input
                             type="time"
                             value={flightTimeVal}
@@ -3040,8 +3560,9 @@ export function ApplicantFollowUpWorkspace({
                             className={cn("h-7 sm:h-7.5 px-2 text-xs font-mono", isTicketLocked && "cursor-not-allowed")}
                           />
                         ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-mono text-slate-800 dark:text-zinc-200">
                             <span className="truncate">{flightTimeVal || "10:00"}</span>
+                            {isPlacementDeparted && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -3051,7 +3572,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Medical 2 Result
                         </Label>
-                        {canEditMedical && placementName ? (
+                        {canEditMedical && placementName && !isPlacementDeparted ? (
                           <select
                             value={currentRow.medical2Status === "FIT" || currentRow.medical2Status === "UNFIT" ? currentRow.medical2Status : "Pending"}
                             disabled={isTicketLocked}
@@ -3092,7 +3613,7 @@ export function ApplicantFollowUpWorkspace({
                               : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                           )}>
                             <span>{currentRow.medical2Status || "Pending"}</span>
-                            {(!canEditMedical || isTicketLocked) && <Lock className="h-3 w-3 text-slate-400" />}
+                            {(!canEditMedical || isTicketLocked || isPlacementDeparted) && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -3102,7 +3623,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Departure Status
                         </Label>
-                        {canEditDeparture && placementName ? (
+                        {canEditDeparture && placementName && !isPlacementDeparted ? (
                           <select
                             value={currentRow.departureStatus || "Pending"}
                             disabled={isTicketLocked}
@@ -3130,33 +3651,12 @@ export function ApplicantFollowUpWorkspace({
                         ) : (
                           <div className={cn(
                             "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
-                            currentRow.departureStatus === "Departed"
+                            currentRow.departureStatus === "Departed" || isPlacementDeparted
                               ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
                               : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                           )}>
-                            <span>{currentRow.departureStatus || "Pending"}</span>
-                            {(!canEditDeparture || isTicketLocked) && <Lock className="h-3 w-3 text-slate-400" />}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Carrier / Airline */}
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Airline Carrier
-                        </Label>
-                        {canEditDeparture ? (
-                          <Input
-                            type="text"
-                            value={airlineVal}
-                            onChange={(e) => setAirlineVal(e.target.value)}
-                            disabled={isTicketLocked}
-                            placeholder="e.g. Ethiopian Airlines"
-                            className={cn("h-7 sm:h-7.5 px-2 text-xs font-medium", isTicketLocked && "cursor-not-allowed")}
-                          />
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center text-slate-800 dark:text-zinc-200 font-medium">
-                            <span className="truncate">{airlineVal || (currentRow.plc as any)?.airline || "Ethiopian Airlines"}</span>
+                            <span>{currentRow.departureStatus || (isPlacementDeparted ? "Departed" : "Pending")}</span>
+                            {(!canEditDeparture || isTicketLocked || isPlacementDeparted) && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -3212,19 +3712,6 @@ export function ApplicantFollowUpWorkspace({
                 {/* Field 7: Ticket Actions */}
                 <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* CV / Dossier PDF Download */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadCvPdf}
-                      className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold cursor-pointer"
-                      title="Download Candidate CV PDF"
-                    >
-                      <FileDown className="h-3 w-3 text-emerald-600" />
-                      <span>CV</span>
-                    </Button>
-
                     {/* Dispatch to Extension */}
                     <Button
                       type="button"
@@ -3786,8 +4273,8 @@ export function ApplicantFollowUpWorkspace({
                     prev
                       ? {
                           ...prev,
-                          teshirStatus: "Completed",
-                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete" } : undefined,
+                          teshirStatus: "Complete",
+                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete", date_completed: new Date().toISOString() } : undefined,
                         }
                       : null
                   );
@@ -3835,41 +4322,35 @@ export function ApplicantFollowUpWorkspace({
                 className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-bold"
               >
                 <option value="Pending">Pending</option>
-                <option value="Booked">Booked</option>
+                <option value="Scheduled">Scheduled</option>
                 <option value="Completed">Completed</option>
-                <option value="Cleared">Cleared</option>
-                <option value="Rejected">Rejected</option>
+                <option value="Failed">Failed</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Appointment Date</Label>
-                <Input
-                  type="date"
-                  value={policeAsharaApptDate}
-                  onChange={(e) => setPoliceAsharaApptDate(e.target.value)}
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Amount (ETB / Fee)</Label>
-                <Input
-                  type="number"
-                  value={policeAsharaAmount}
-                  onChange={(e) => setPoliceAsharaAmount(e.target.value)}
-                  placeholder="e.g. 500"
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Appointment Date</Label>
+              <Input
+                type="date"
+                value={policeAsharaApptDate}
+                onChange={(e) => setPoliceAsharaApptDate(e.target.value)}
+                className="h-8 text-xs font-mono"
+              />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Police Ashara Remark</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">
+                  Police Ashara Remark {policeAsharaStatus === "Failed" && <span className="text-rose-600 font-bold">*</span>}
+                </Label>
+                {policeAsharaStatus === "Failed" && (
+                  <span className="text-[10px] text-rose-600 font-medium">Required for Failed status</span>
+                )}
+              </div>
               <Input
                 type="text"
                 value={policeAsharaRemark}
                 onChange={(e) => setPoliceAsharaRemark(e.target.value)}
-                placeholder="Police station or biometric remarks..."
-                className="h-8 text-xs"
+                placeholder={policeAsharaStatus === "Failed" ? "Reason for failure is required..." : "Police station or biometric remarks..."}
+                className={cn("h-8 text-xs", policeAsharaStatus === "Failed" && !policeAsharaRemark.trim() && "border-rose-400 focus-visible:ring-rose-400")}
               />
             </div>
           </div>
@@ -3890,6 +4371,108 @@ export function ApplicantFollowUpWorkspace({
                 </>
               ) : (
                 "Save Police Ashara"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 1d. Edit Placement LMIS Details Dialog (Kuwait) */}
+      <Dialog open={isPlacementLmisOpen} onOpenChange={setIsPlacementLmisOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Edit Placement LMIS Details
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Update Kuwait bilateral contract and employer placement details for{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Employer City</Label>
+                <Input
+                  type="text"
+                  value={employerCity}
+                  onChange={(e) => setEmployerCity(e.target.value)}
+                  placeholder="e.g. Kuwait City"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">House Number</Label>
+                <Input
+                  type="text"
+                  value={employerHouseNo}
+                  onChange={(e) => setEmployerHouseNo(e.target.value)}
+                  placeholder="e.g. Bldg 14, St 5"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Employer Phone</Label>
+                <Input
+                  type="text"
+                  value={employerPhone}
+                  onChange={(e) => setEmployerPhone(e.target.value)}
+                  placeholder="e.g. +965 9988 7766"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Alt Phone</Label>
+                <Input
+                  type="text"
+                  value={employerAltPhone}
+                  onChange={(e) => setEmployerAltPhone(e.target.value)}
+                  placeholder="e.g. +965 2233 4455"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Contract Start Date</Label>
+                <Input
+                  type="date"
+                  value={contractStartDate}
+                  onChange={(e) => setContractStartDate(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Contract End Date</Label>
+                <Input
+                  type="date"
+                  value={contractEndDate}
+                  onChange={(e) => setContractEndDate(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setIsPlacementLmisOpen(false)} className="text-xs h-8">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isSavingPlacementLmis}
+              onClick={handleSavePlacementLmis}
+              className="text-xs h-8 bg-blue-700 hover:bg-blue-800 text-white font-semibold cursor-pointer"
+            >
+              {isSavingPlacementLmis ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Saving...
+                </>
+              ) : (
+                "Save Details"
               )}
             </Button>
           </DialogFooter>

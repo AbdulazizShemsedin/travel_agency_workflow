@@ -100,6 +100,9 @@ export interface WorkspaceApplicantRow {
   injazApplicationId?: string;
   appointmentDate?: string;
   teshirStatus?: string;
+  policeAsharaStatus?: string;
+  policeAsharaAppointmentDate?: string;
+  policeAsharaRemark?: string;
   contact?: string;
   remark?: string;
   religion?: string;

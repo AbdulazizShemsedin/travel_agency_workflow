@@ -48,6 +48,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import {
   setLmisStatusV2,
+  startClearanceStepV2,
   completeClearanceStepV2,
   recordPoliceAsharaV2,
   setTaeshirStatusV2,
@@ -982,12 +983,18 @@ export function FollowUpWorkspace({
       return;
     }
 
-    if (row.teshirStatus === "Completed" || row.injaz?.status === "Complete") {
+    const isAlreadyComplete =
+      row.teshirStatus?.toLowerCase() === "completed" ||
+      row.teshirStatus?.toLowerCase() === "complete" ||
+      row.injaz?.status === "Complete" ||
+      row.injaz?.status === "Completed" ||
+      Boolean(row.injaz?.date_completed);
+    if (isAlreadyComplete) {
       toast.error("This stage is already complete and cannot be relabelled.");
       return;
     }
 
-    if (newStatus === "Completed") {
+    if (newStatus === "Completed" || newStatus === "Complete") {
       const validation = checkTaeshirStageRequirements(row);
       setFormTeshirRef(validation.fieldValues.telesignRef || "");
       setFormAppointmentDate(validation.fieldValues.appointmentDate || new Date().toISOString().split("T")[0]);
@@ -995,7 +1002,7 @@ export function FollowUpWorkspace({
       // When user chooses Completed, default Injaz Payment to Paid if currently Unpaid/Printed
       setFormInjazPaymentStatus(validation.fieldValues.injazPaymentStatus === "Paid" ? "Paid" : "Paid");
       setFormTeshirStatus(validation.fieldValues.teshirStatus === "INFORMED" ? "READY TO EMBASSY" : validation.fieldValues.teshirStatus || "READY TO EMBASSY");
-      setFormTeshirCompleted("Completed");
+      setFormTeshirCompleted(isKuwait ? "Complete" : "Completed");
       setFormTeshirRemark(validation.fieldValues.teshirRemark || "");
       setFormIssueDate((row.injaz as any)?.date_completed || new Date().toISOString().split("T")[0]);
       setFieldErrors({});
@@ -1005,7 +1012,7 @@ export function FollowUpWorkspace({
           open: true,
           mode: "confirm",
           stage: isKuwait ? "TELESIGN" : "TAESHIR",
-          targetStatus: "Completed",
+          targetStatus: isKuwait ? "Complete" : "Completed",
           row,
           validation,
         });
@@ -1014,7 +1021,7 @@ export function FollowUpWorkspace({
           open: true,
           mode: "edit",
           stage: isKuwait ? "TELESIGN" : "TAESHIR",
-          targetStatus: "Completed",
+          targetStatus: isKuwait ? "Complete" : "Completed",
           row,
           validation,
         });
@@ -1023,7 +1030,11 @@ export function FollowUpWorkspace({
     }
 
     try {
-      if (!isKuwait) {
+      if (isKuwait) {
+        if (newStatus === "In Progress") {
+          await startClearanceStepV2(stepName);
+        }
+      } else {
         await setTaeshirStatusV2(stepName, newStatus);
       }
       await handleMutationSuccess(`Status updated to ${newStatus}`);
@@ -1388,7 +1399,7 @@ export function FollowUpWorkspace({
         }
         stageDetailsSaved = true;
 
-        if (andComplete || formTeshirCompleted === "Completed") {
+        if (andComplete || formTeshirCompleted === "Completed" || formTeshirCompleted === "Complete") {
           await completeClearanceStepV2(
             stepName,
             formInjazAppId.trim() || undefined,
@@ -1412,7 +1423,7 @@ export function FollowUpWorkspace({
         }
         stageDetailsSaved = true;
 
-        if (andComplete || formTeshirCompleted === "Completed") {
+        if (andComplete || formTeshirCompleted === "Completed" || formTeshirCompleted === "Complete") {
           await completeClearanceStepV2(stepName, formTeshirRef.trim(), undefined, formIssueDate || undefined);
           await handleMutationSuccess(`Telesign stage completed for ${row.fullName}`);
           setStageModalState(null);
@@ -1531,8 +1542,8 @@ export function FollowUpWorkspace({
 
   const kuwaitTelesignOptions = React.useMemo(() => [
     { value: "Pending", label: "Pending", badgeClass: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-zinc-800 dark:text-zinc-200" },
-    { value: "Submitted", label: "Submitted", badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300" },
-    { value: "Completed", label: "Completed", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+    { value: "In Progress", label: "In Progress", badgeClass: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300" },
+    { value: "Complete", label: "Complete", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
   ], []);
 
   const embassyOptions = React.useMemo(() => [
@@ -1547,6 +1558,9 @@ export function FollowUpWorkspace({
     { value: "Ticketed", label: "Ticketed", badgeClass: "bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-950 dark:text-cyan-300" },
     { value: "Departed", label: "Departed", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-bold" },
   ], []);
+
+  const isKuwaitCorridor = (corridorFilter || "").toLowerCase().includes("kuwait");
+  const isSaudiCorridor = (corridorFilter || "").toLowerCase().includes("saudi");
 
   // Columns for Level 1 Table: Checkbox select, Number, and preserved exact approved order (14 columns)
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
@@ -1670,12 +1684,12 @@ export function FollowUpWorkspace({
     // 7. LMIS Status
     {
       id: "lmisStatus",
-      header: "LMIS STATUS",
+      header: isKuwaitCorridor ? "KUWAIT LMIS" : "LMIS STATUS",
       accessorKey: "lmisStatus",
       width: "85px",
       cell: (row) => {
         const currentVal = row.lmisStatus || "Pending";
-        const isIssued = currentVal === "ISSUED";
+        const isIssued = currentVal === "ISSUED" || currentVal === "Issued" || currentVal === "Complete" || currentVal === "Completed";
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
@@ -1693,13 +1707,19 @@ export function FollowUpWorkspace({
     // 6. Taeshir Status (Saudi) / Telesign Status (Kuwait)
     {
       id: "teshirStatus",
-      header: "TAESHIR / TELESIGN",
+      header: isKuwaitCorridor ? "TELESIGN" : isSaudiCorridor ? "TAESHIR / INJAZ" : "TAESHIR / TELESIGN",
       accessorKey: "teshirStatus",
       width: "85px",
       cell: (row) => {
         const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
-        const status = row.teshirStatus || (isKuwait ? "Pending" : "—");
-        const isComplete = status === "Completed" || row.injaz?.status === "Complete";
+        const rawStatus = row.teshirStatus || (isKuwait ? "Pending" : "—");
+        const isComplete =
+          rawStatus.toLowerCase() === "complete" ||
+          rawStatus.toLowerCase() === "completed" ||
+          row.injaz?.status === "Complete" ||
+          row.injaz?.status === "Completed" ||
+          Boolean(row.injaz?.date_completed);
+        const status = isComplete ? (isKuwait ? "Complete" : "Completed") : rawStatus;
         // A step with no Tesheer status shows "Not set" (the select would otherwise show its first option).
         const options = isKuwait
           ? kuwaitTelesignOptions
@@ -1733,17 +1753,40 @@ export function FollowUpWorkspace({
         );
       },
     },
-    // 11. Wakala Status
+    // 11. Wakala Status (Saudi) / Police Ashara (Kuwait)
     {
       id: "wakalaStatus",
-      header: "WAKALA STATUS",
+      header: isKuwaitCorridor ? "POLICE ASHARA" : isSaudiCorridor ? "WAKALA STATUS" : "WAKALA / ASHARA",
       accessorKey: "wakalaStatus",
-      width: "75px",
+      width: "85px",
       isReadOnly: true,
       cell: (row) => {
         const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
         if (isKuwait) {
-          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait">—</span>;
+          const asharaStatus = row.policeAsharaStatus || "Pending";
+          const asharaBadgeClass =
+            asharaStatus === "Completed"
+              ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-semibold"
+              : asharaStatus === "Scheduled"
+              ? "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 font-semibold"
+              : asharaStatus === "Failed"
+              ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300 font-semibold"
+              : "bg-slate-100 text-slate-800 border-slate-200 dark:bg-zinc-800 dark:text-zinc-200 font-semibold";
+          return (
+            <div
+              className="flex items-center cursor-pointer"
+              title={
+                row.policeAsharaAppointmentDate
+                  ? `Police Ashara: ${asharaStatus} (Appt: ${row.policeAsharaAppointmentDate})${row.policeAsharaRemark ? ` • ${row.policeAsharaRemark}` : ""}`
+                  : `Police Ashara: ${asharaStatus}`
+              }
+              onClick={() => router.push(`/applicants/${encodeURIComponent(row.applicantId)}/follow-up`)}
+            >
+              <Badge variant="outline" className={cn("text-[9.5px] py-0 px-1 font-semibold", asharaBadgeClass)}>
+                {asharaStatus}
+              </Badge>
+            </div>
+          );
         }
         return getStatusBadge(row.wakalaStatus);
       },
@@ -1751,9 +1794,9 @@ export function FollowUpWorkspace({
     // 12. Embassy/Visa Status
     {
       id: "embassyStatus",
-      header: "EMBASSY / VISA",
+      header: isKuwaitCorridor ? "KUWAIT EMBASSY / EVISA" : isSaudiCorridor ? "SAUDI EMBASSY" : "EMBASSY / VISA",
       accessorKey: "embassyStatus",
-      width: "80px",
+      width: "85px",
       cell: (row) => {
         const currentVal = row.embassyStatus || "Pending";
         const isStamped = currentVal === "Stamped" || row.embassy?.status === "Stamped";

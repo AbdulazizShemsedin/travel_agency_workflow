@@ -403,6 +403,22 @@ export async function fetchOperationalWorkspaceDataV2(
           : "Pending";
       const ticketNumber = plc?.ticket_number || "—";
 
+      const policeAsharaStatus =
+        (lmsStep as any)?.police_ashara_status ||
+        (plc as any)?.police_ashara_status ||
+        (plc as any)?.lms_clearance?.police_ashara_status ||
+        (isKuwait ? "Pending" : undefined);
+      const policeAsharaAppointmentDate =
+        (lmsStep as any)?.police_ashara_appointment_date ||
+        (plc as any)?.police_ashara_appointment_date ||
+        (plc as any)?.lms_clearance?.police_ashara_appointment_date ||
+        undefined;
+      const policeAsharaRemark =
+        (lmsStep as any)?.police_ashara_remark ||
+        (plc as any)?.police_ashara_remark ||
+        (plc as any)?.lms_clearance?.police_ashara_remark ||
+        undefined;
+
       // Select active clearance step for this stream
       const activeStep =
         streamType === "lms"
@@ -516,7 +532,11 @@ export async function fetchOperationalWorkspaceDataV2(
         })(),
         teshirStatus: (() => {
           if (isKuwait) {
-            return injazStep?.status || "Pending";
+            const rawStatus = injazStep?.status || "Pending";
+            if (rawStatus.toLowerCase() === "completed" || rawStatus.toLowerCase() === "complete" || Boolean(injazStep?.date_completed)) {
+              return "Complete";
+            }
+            return rawStatus;
           }
           const isDone =
             injazStep?.status === "Completed" ||
@@ -528,6 +548,9 @@ export async function fetchOperationalWorkspaceDataV2(
           // The Tesheer status only; the step's own status (Pending) is not one, and a new step has none.
           return rawTaeshir || (injazStep ? "" : "—");
         })(),
+        policeAsharaStatus,
+        policeAsharaAppointmentDate,
+        policeAsharaRemark,
         medical2Status: (plc as any)?.medical_2_status || (applicant as any)?.medical_2_status || "—",
         departureStatus:
           plc?.status === "Departed" || (plc as any)?.departure_status === "Departed"
