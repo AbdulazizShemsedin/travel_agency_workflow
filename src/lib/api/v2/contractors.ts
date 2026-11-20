@@ -173,8 +173,8 @@ export async function updateContractorV2(
         communication_manager: payload.communication_manager,
         phone: payload.phone,
         whatsapp: payload.whatsapp,
-        // Staff notes (blank clears them). The e-mail is the agency's login and is not sent: the
-        // backend refuses a change, and the edit form shows it read-only.
+        ...(payload.email ? { email: payload.email.trim(), user_email: payload.email.trim() } : {}),
+        // Staff notes (blank clears them).
         ...(payload.notes !== undefined ? { notes: payload.notes ?? "" } : {}),
         ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
         ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),

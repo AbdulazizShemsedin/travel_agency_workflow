@@ -17,7 +17,7 @@ import { ApiV2Error } from "./client";
 import { toClientCocStatus } from "@/lib/validations/applicant.schema";
 import { getApplicantV2, listApplicantsV2, V2ApplicantDetails } from "./applicants";
 import { listPlacementsForApplicantV2, listPlacementsV2, V2PlacementRecord } from "./placements";
-import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
+import { listMyClearanceStepsV2, getClearanceStepDocV2, V2ClearanceStepItem } from "./clearance";
 import { resolveEffectiveMedical } from "./medical";
 import type { WorkspaceApplicantRow, OperationalStreamType } from "@/types/workspace";
 
@@ -196,13 +196,13 @@ export async function fetchOperationalWorkspaceDataV2(
         ? stepsByPlacement.get(plc.name.toLowerCase().trim()) || []
         : stepsByApplicant.get(applicantKey) || [];
 
-      const lmsStep = siblingSteps.find(
+      let lmsStep = siblingSteps.find(
         (s) => s.step_type === "LMIS Clearance" || s.step_type === "Kuwait LMIS"
       );
-      const injazStep = siblingSteps.find(
+      let injazStep = siblingSteps.find(
         (s) => s.step_type === "Taeshir" || s.step_type === "Telesign"
       );
-      const embassyStep = siblingSteps.find(
+      let embassyStep = siblingSteps.find(
         (s) =>
           s.step_type === "Embassy" ||
           s.step_type === "Saudi Embassy" ||
@@ -213,6 +213,20 @@ export async function fetchOperationalWorkspaceDataV2(
       // Check step completion statuses
       const isSaudi = dest.toLowerCase().includes("saudi");
       const isKuwait = dest.toLowerCase().includes("kuwait");
+
+      // Hydrate clearance step details (Police Ashara, Wakala, Telesign/Injaz fields)
+      // When single/detail mode or Kuwait applicant with steps, list_my_clearance_steps
+      // only returns the 6 basic list fields; getClearanceStepDocV2 fetches the full doc.
+      if (single || singleId || isKuwait) {
+        const [fullLms, fullInjaz, fullEmbassy] = await Promise.all([
+          lmsStep?.name ? getClearanceStepDocV2(lmsStep.name) : Promise.resolve(null),
+          injazStep?.name ? getClearanceStepDocV2(injazStep.name) : Promise.resolve(null),
+          embassyStep?.name ? getClearanceStepDocV2(embassyStep.name) : Promise.resolve(null),
+        ]);
+        if (fullLms) lmsStep = { ...lmsStep, ...fullLms };
+        if (fullInjaz) injazStep = { ...injazStep, ...fullInjaz };
+        if (fullEmbassy) embassyStep = { ...embassyStep, ...fullEmbassy };
+      }
 
       // 1. LMIS Completion: LMIS step must be Issued/Completed, and COC fields finished (for Saudi)
       const isLmsIssued =

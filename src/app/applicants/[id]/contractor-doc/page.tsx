@@ -30,6 +30,7 @@ import {
   FileBadge2,
   Pencil,
   AlertTriangle,
+  Save,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -153,6 +154,42 @@ export default function PlacementDocumentCenterPage() {
   const [isVisaUploading, setIsVisaUploading] = React.useState(false);
   const [isRetryingVisaExtraction, setIsRetryingVisaExtraction] = React.useState(false);
   const [visaParseResult, setVisaParseResult] = React.useState<V2ParsedVisaData | null>(null);
+
+  // Inline Excel-like editing state for Employment Contract
+  const [contractFields, setContractFields] = React.useState({
+    contract_number: "",
+    contract_signed_date: "",
+    contract_duration: "",
+    contract_salary_amount: "",
+    contract_salary_currency: "",
+    employer_name: "",
+    employer_national_id: "",
+    employer_address: "",
+    employment_site: "",
+    saudi_agency_name: "",
+    saudi_agency_license: "",
+    kuwait_agency_name: "",
+    kuwait_agency_license: "",
+    visa_number: "",
+  });
+  const [isSavingContractFields, setIsSavingContractFields] = React.useState(false);
+  const [isContractDirty, setIsContractDirty] = React.useState(false);
+
+  // Inline Excel-like editing state for Kuwait eVisa
+  const [visaFields, setVisaFields] = React.useState({
+    visa_number: "",
+    visa_reference_number: "",
+    visa_type: "",
+    visa_issue_date: "",
+    visa_expiry_date: "",
+    sponsor_name: "",
+    sponsor_id: "",
+    kuwait_agency_name: "",
+    kuwait_agency_license: "",
+  });
+  const [isSavingVisaFields, setIsSavingVisaFields] = React.useState(false);
+  const [isVisaDirty, setIsVisaDirty] = React.useState(false);
+  const [backendVisaExtractionFailed, setBackendVisaExtractionFailed] = React.useState(false);
 
   // Active Preview Target
   const [previewFileUrl, setPreviewFileUrl] = React.useState<string>("");
@@ -280,6 +317,45 @@ export default function PlacementDocumentCenterPage() {
       }
     }
   }, [activePlacement, previewFileUrl]);
+
+  // Synchronize inline contract fields from active placement or parsed results when not dirty
+  React.useEffect(() => {
+    if (activePlacement || contractParseResult) {
+      setContractFields((prev) => ({
+        contract_number: isContractDirty ? prev.contract_number : (activePlacement?.contract_number || contractParseResult?.contract_number || prev.contract_number),
+        contract_signed_date: isContractDirty ? prev.contract_signed_date : (activePlacement?.contract_signed_date || contractParseResult?.contract_signed_date || contractParseResult?.contract_date || prev.contract_signed_date),
+        contract_duration: isContractDirty ? prev.contract_duration : ((activePlacement as any)?.contract_duration || (contractParseResult as any)?.contract_duration || prev.contract_duration || (isKuwait ? "2 Years" : "")),
+        contract_salary_amount: isContractDirty ? prev.contract_salary_amount : (String((activePlacement as any)?.contract_salary_amount || (contractParseResult as any)?.contract_salary_amount || (contractParseResult as any)?.salary_amount || "") || prev.contract_salary_amount),
+        contract_salary_currency: isContractDirty ? prev.contract_salary_currency : ((activePlacement as any)?.contract_salary_currency || (contractParseResult as any)?.contract_salary_currency || (contractParseResult as any)?.salary_currency || prev.contract_salary_currency || (isKuwait ? "KWD" : "SAR")),
+        employer_name: isContractDirty ? prev.employer_name : (activePlacement?.employer_name || contractParseResult?.employer_name || contractParseResult?.sponsor_name || prev.employer_name),
+        employer_national_id: isContractDirty ? prev.employer_national_id : (activePlacement?.employer_national_id || contractParseResult?.employer_national_id || contractParseResult?.sponsor_id || prev.employer_national_id),
+        employer_address: isContractDirty ? prev.employer_address : ((activePlacement as any)?.employer_address || (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address || prev.employer_address),
+        employment_site: isContractDirty ? prev.employment_site : (activePlacement?.employment_site || (contractParseResult as any)?.employment_site || prev.employment_site || (isKuwait ? "Kuwait" : "")),
+        saudi_agency_name: isContractDirty ? prev.saudi_agency_name : ((activePlacement as any)?.saudi_agency_name || contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name || prev.saudi_agency_name),
+        saudi_agency_license: isContractDirty ? prev.saudi_agency_license : ((activePlacement as any)?.saudi_agency_license || (contractParseResult as any)?.saudi_agency_license || prev.saudi_agency_license),
+        kuwait_agency_name: isContractDirty ? prev.kuwait_agency_name : ((activePlacement as any)?.kuwait_agency_name || contractParseResult?.kuwait_agency_name || contractParseResult?.contractor_name || prev.kuwait_agency_name),
+        kuwait_agency_license: isContractDirty ? prev.kuwait_agency_license : ((activePlacement as any)?.kuwait_agency_license || (contractParseResult as any)?.kuwait_agency_license || prev.kuwait_agency_license),
+        visa_number: isContractDirty ? prev.visa_number : (activePlacement?.visa_number || contractParseResult?.visa_number || visaParseResult?.visa_number || prev.visa_number),
+      }));
+    }
+  }, [activePlacement, contractParseResult, isKuwait, isContractDirty]);
+
+  // Synchronize inline visa fields from active placement or parsed results when not dirty
+  React.useEffect(() => {
+    if (activePlacement || visaParseResult) {
+      setVisaFields((prev) => ({
+        visa_number: isVisaDirty ? prev.visa_number : (activePlacement?.visa_number || (activePlacement as any)?.visa_reference_number || visaParseResult?.visa_number || prev.visa_number),
+        visa_reference_number: isVisaDirty ? prev.visa_reference_number : ((activePlacement as any)?.visa_reference_number || (visaParseResult as any)?.visa_reference_number || (visaParseResult as any)?.reference || prev.visa_reference_number),
+        visa_type: isVisaDirty ? prev.visa_type : ((activePlacement as any)?.visa_type || visaParseResult?.visa_type || prev.visa_type || "Work Visa"),
+        visa_issue_date: isVisaDirty ? prev.visa_issue_date : ((activePlacement as any)?.visa_issue_date || visaParseResult?.issue_date || (visaParseResult as any)?.visa_issue_date || prev.visa_issue_date),
+        visa_expiry_date: isVisaDirty ? prev.visa_expiry_date : ((activePlacement as any)?.visa_expiry_date || visaParseResult?.expiry_date || (visaParseResult as any)?.visa_expiry_date || prev.visa_expiry_date),
+        sponsor_name: isVisaDirty ? prev.sponsor_name : (activePlacement?.employer_name || activePlacement?.sponsor_name || visaParseResult?.sponsor_name || prev.sponsor_name),
+        sponsor_id: isVisaDirty ? prev.sponsor_id : (activePlacement?.employer_national_id || (activePlacement as any)?.sponsor_civil_id || visaParseResult?.sponsor_id || (visaParseResult as any)?.civil_id || prev.sponsor_id),
+        kuwait_agency_name: isVisaDirty ? prev.kuwait_agency_name : ((activePlacement as any)?.kuwait_agency_name || (visaParseResult as any)?.kuwait_agency_name || (activePlacement as any)?.contractor_name || prev.kuwait_agency_name),
+        kuwait_agency_license: isVisaDirty ? prev.kuwait_agency_license : ((activePlacement as any)?.kuwait_agency_license || (visaParseResult as any)?.kuwait_agency_license || prev.kuwait_agency_license),
+      }));
+    }
+  }, [activePlacement, visaParseResult, isVisaDirty]);
 
   // Helper to extract clean file extension from filename or URL
   const getFileExtension = React.useCallback((nameOrUrl: string, fallback = "pdf") => {
@@ -743,21 +819,23 @@ export default function PlacementDocumentCenterPage() {
 
       // 2. Save and approve the extracted contract fields on the placement
       const payloadToUpdate: Record<string, any> = {};
-      const employerName = contractParseResult?.employer_name || contractParseResult?.sponsor_name;
-      const employerId = contractParseResult?.employer_national_id || contractParseResult?.sponsor_id;
-      const agencyName = contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name;
-      const contractDate = contractParseResult?.contract_signed_date || contractParseResult?.contract_date;
-      const employerAddress = (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address;
-      const salaryAmount = (contractParseResult as any)?.contract_salary_amount || (contractParseResult as any)?.salary_amount;
-      const salaryCurrency = (contractParseResult as any)?.contract_salary_currency || (contractParseResult as any)?.salary_currency;
-      const employmentSite = (contractParseResult as any)?.employment_site;
-      const contractDuration = (contractParseResult as any)?.contract_duration;
-      const kuwaitAgencyName = (contractParseResult as any)?.kuwait_agency_name;
-      const kuwaitAgencyLicense = (contractParseResult as any)?.kuwait_agency_license;
-      const saudiAgencyLicense = (contractParseResult as any)?.saudi_agency_license;
+      const employerName = contractFields.employer_name || contractParseResult?.employer_name || contractParseResult?.sponsor_name;
+      const employerId = contractFields.employer_national_id || contractParseResult?.employer_national_id || contractParseResult?.sponsor_id;
+      const agencyName = contractFields.saudi_agency_name || contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name;
+      const contractDate = contractFields.contract_signed_date || contractParseResult?.contract_signed_date || contractParseResult?.contract_date;
+      const employerAddress = contractFields.employer_address || (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address;
+      const salaryAmount = contractFields.contract_salary_amount || (contractParseResult as any)?.contract_salary_amount || (contractParseResult as any)?.salary_amount;
+      const salaryCurrency = contractFields.contract_salary_currency || (contractParseResult as any)?.contract_salary_currency || (contractParseResult as any)?.salary_currency;
+      const employmentSite = contractFields.employment_site || (contractParseResult as any)?.employment_site;
+      const contractDuration = contractFields.contract_duration || (contractParseResult as any)?.contract_duration;
+      const kuwaitAgencyName = contractFields.kuwait_agency_name || (contractParseResult as any)?.kuwait_agency_name;
+      const kuwaitAgencyLicense = contractFields.kuwait_agency_license || (contractParseResult as any)?.kuwait_agency_license;
+      const saudiAgencyLicense = contractFields.saudi_agency_license || (contractParseResult as any)?.saudi_agency_license;
+      const contractNumber = contractFields.contract_number || contractParseResult?.contract_number;
+      const visaNumber = contractFields.visa_number || contractParseResult?.visa_number;
 
-      if (contractParseResult?.contract_number) payloadToUpdate.contract_number = contractParseResult.contract_number;
-      if (contractParseResult?.visa_number) payloadToUpdate.visa_number = contractParseResult.visa_number;
+      if (contractNumber) payloadToUpdate.contract_number = contractNumber;
+      if (visaNumber) payloadToUpdate.visa_number = visaNumber;
       if (employerName) payloadToUpdate.employer_name = employerName;
       if (employerId) payloadToUpdate.employer_national_id = employerId;
       if (agencyName) payloadToUpdate.saudi_agency_name = agencyName;
@@ -827,6 +905,132 @@ export default function PlacementDocumentCenterPage() {
     }
   };
 
+  // Save Inline Contract Fields Directly to Placement and Applicant
+  const handleSaveInlineContractFields = async () => {
+    let targetPlacement = activePlacement;
+    if (!targetPlacement) {
+      targetPlacement = await resolveTargetPlacement();
+    }
+    if (!targetPlacement) {
+      toast.error("No active placement record found.");
+      return;
+    }
+
+    setIsSavingContractFields(true);
+    try {
+      const payloadToUpdate: Record<string, any> = {
+        ...(contractFields.contract_number ? { contract_number: contractFields.contract_number.trim() } : {}),
+        ...(contractFields.contract_signed_date ? { contract_signed_date: contractFields.contract_signed_date.trim() } : {}),
+        ...(contractFields.contract_duration ? { contract_duration: contractFields.contract_duration.trim() } : {}),
+        ...(contractFields.contract_salary_amount ? { contract_salary_amount: contractFields.contract_salary_amount.trim() } : {}),
+        ...(contractFields.contract_salary_currency ? { contract_salary_currency: contractFields.contract_salary_currency.trim() } : {}),
+        ...(contractFields.employer_name ? { employer_name: contractFields.employer_name.trim() } : {}),
+        ...(contractFields.employer_national_id ? { employer_national_id: contractFields.employer_national_id.trim() } : {}),
+        ...(contractFields.employer_address ? { employer_address: contractFields.employer_address.trim() } : {}),
+        ...(contractFields.employment_site ? { employment_site: contractFields.employment_site.trim() } : {}),
+        ...(contractFields.saudi_agency_name ? { saudi_agency_name: contractFields.saudi_agency_name.trim() } : {}),
+        ...(contractFields.saudi_agency_license ? { saudi_agency_license: contractFields.saudi_agency_license.trim() } : {}),
+        ...(contractFields.kuwait_agency_name ? { kuwait_agency_name: contractFields.kuwait_agency_name.trim() } : {}),
+        ...(contractFields.kuwait_agency_license ? { kuwait_agency_license: contractFields.kuwait_agency_license.trim() } : {}),
+        ...(contractFields.visa_number ? { visa_number: contractFields.visa_number.trim() } : {}),
+      };
+
+      await updatePlacementParsedFieldsV2(targetPlacement.name, payloadToUpdate);
+
+      // Also update applicant if relevant
+      const applicantUpdate: Record<string, any> = {};
+      if (contractFields.employer_name) applicantUpdate.sponsor_name = contractFields.employer_name.trim();
+      if (contractFields.employer_national_id) applicantUpdate.sponsor_id = contractFields.employer_national_id.trim();
+      if (contractFields.visa_number) applicantUpdate.visa_number = contractFields.visa_number.trim();
+      if (contractFields.contract_number) applicantUpdate.contract_number = contractFields.contract_number.trim();
+      if (Object.keys(applicantUpdate).length > 0 && applicantId) {
+        try {
+          await updateApplicantV2(applicantId, applicantUpdate);
+        } catch (e) {
+          console.warn("[SaveContract] Failed to sync applicant fields:", e);
+        }
+      }
+
+      setContractParseResult((prev: any) => ({
+        ...prev,
+        ...payloadToUpdate,
+      }));
+      setIsContractDirty(false);
+      toast.success("Contract Terms Saved", {
+        description: "Contract details updated and saved to placement successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant_v2", applicantId] });
+    } catch (err: any) {
+      toast.error("Failed to Save Contract Terms", {
+        description: err?.message || "Failed to update placement contract terms.",
+      });
+    } finally {
+      setIsSavingContractFields(false);
+    }
+  };
+
+  // Save Inline Kuwait eVisa Fields Directly to Placement and Applicant
+  const handleSaveInlineVisaFields = async () => {
+    let targetPlacement = activePlacement;
+    if (!targetPlacement) {
+      targetPlacement = await resolveTargetPlacement();
+    }
+    if (!targetPlacement) {
+      toast.error("No active placement record found.");
+      return;
+    }
+
+    setIsSavingVisaFields(true);
+    try {
+      const payloadToUpdate: Record<string, any> = {
+        ...(visaFields.visa_number ? { visa_number: visaFields.visa_number.trim() } : {}),
+        ...(visaFields.visa_reference_number ? { visa_reference_number: visaFields.visa_reference_number.trim() } : {}),
+        ...(visaFields.visa_type ? { visa_type: visaFields.visa_type.trim() } : {}),
+        ...(visaFields.visa_issue_date ? { visa_issue_date: visaFields.visa_issue_date.trim() } : {}),
+        ...(visaFields.visa_expiry_date ? { visa_expiry_date: visaFields.visa_expiry_date.trim() } : {}),
+        ...(visaFields.sponsor_name ? { employer_name: visaFields.sponsor_name.trim(), sponsor_name: visaFields.sponsor_name.trim() } : {}),
+        ...(visaFields.sponsor_id ? { employer_national_id: visaFields.sponsor_id.trim(), sponsor_civil_id: visaFields.sponsor_id.trim() } : {}),
+        ...(visaFields.kuwait_agency_name ? { kuwait_agency_name: visaFields.kuwait_agency_name.trim() } : {}),
+        ...(visaFields.kuwait_agency_license ? { kuwait_agency_license: visaFields.kuwait_agency_license.trim() } : {}),
+      };
+
+      await updatePlacementParsedFieldsV2(targetPlacement.name, payloadToUpdate);
+
+      // Synchronize to applicant
+      const applicantUpdate: Record<string, any> = {};
+      if (visaFields.visa_number) applicantUpdate.visa_number = visaFields.visa_number.trim();
+      if (visaFields.sponsor_name) applicantUpdate.sponsor_name = visaFields.sponsor_name.trim();
+      if (visaFields.sponsor_id) applicantUpdate.sponsor_id = visaFields.sponsor_id.trim();
+      if (Object.keys(applicantUpdate).length > 0 && applicantId) {
+        try {
+          await updateApplicantV2(applicantId, applicantUpdate);
+        } catch (e) {
+          console.warn("[SaveVisa] Failed to sync applicant fields:", e);
+        }
+      }
+
+      setVisaParseResult((prev: any) => ({
+        ...prev,
+        ...payloadToUpdate,
+      }));
+      setIsVisaDirty(false);
+      toast.success("Kuwait eVisa Details Saved", {
+        description: "eVisa information updated and saved to placement successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant_v2", applicantId] });
+    } catch (err: any) {
+      toast.error("Failed to Save Visa Details", {
+        description: err?.message || "Failed to update placement visa details.",
+      });
+    } finally {
+      setIsSavingVisaFields(false);
+    }
+  };
+
   // Upload & Attach Kuwait eVisa Mutation
   const handleUploadVisa = async (previewOnly = false) => {
     if (!visaFile) {
@@ -854,7 +1058,7 @@ export default function PlacementDocumentCenterPage() {
         return;
       }
 
-      // 1. Upload file via /api/method/upload_file
+      // 1. Upload file via uploadFileV2
       const uploadRes = await uploadFileV2(
         visaFile,
         false,
@@ -866,9 +1070,7 @@ export default function PlacementDocumentCenterPage() {
       if (!fileId) {
         throw new Error("Upload completed but no file reference was returned by the server.");
       }
-      const downloadUrl = getFileDownloadUrl(fileId);
-      setPreviewFileUrl(downloadUrl);
-      setVisaPreviewUrl(downloadUrl);
+      setPreviewFileUrl(fileId);
 
       if (previewOnly) {
         // Run OCR parsing preview only
@@ -878,19 +1080,24 @@ export default function PlacementDocumentCenterPage() {
           setVisaParseResult(validParsed);
           const count = countExtractedVisaFields(validParsed);
           if (count >= 3) {
+            setBackendVisaExtractionFailed(false);
             toast.success("eVisa Parsed for Preview", {
-              description: "Structured fields extracted from visa file.",
+              description: `Structured fields extracted (${count} fields). Review below.`,
             });
           } else if (count > 0) {
+            setBackendVisaExtractionFailed(false);
             toast.info("Partial eVisa Extracted for Preview", {
-              description: "Some visa details extracted. Review and then attach.",
+              description: "Some visa details extracted. Review below and enter remaining details.",
             });
           } else {
-            toast.warning("eVisa Extraction Incomplete", {
-              description: "Could not extract visa details. You can still attach and edit fields manually.",
+            setBackendVisaExtractionFailed(true);
+            toast.warning("Backend Extractor Returned No Fields", {
+              description: "The backend visa extractor did not return structured fields for this document. Please enter the fields manually below and notify the backend team to adjust the extractor.",
+              duration: 8000,
             });
           }
         } catch (e: any) {
+          setBackendVisaExtractionFailed(true);
           toast.error("eVisa Preview Extraction Failed", {
             description: e?.message || "Failed to extract visa details from preview file.",
           });
@@ -924,19 +1131,27 @@ export default function PlacementDocumentCenterPage() {
         const extractedCount = countExtractedVisaFields(combined);
 
         if (!parseError && extractedCount >= 3) {
-          // Outcome A
+          setBackendVisaExtractionFailed(false);
           toast.success("Kuwait eVisa Attached & Info Extracted", {
-            description: `Visa attached to ${targetPlacement!.name}. Review extracted visa details below.`,
+            description: `Visa attached to ${targetPlacement!.name}. Structured fields extracted (${extractedCount} fields).`,
           });
+          // Auto-save extracted fields to placement
+          if (Object.keys(validParsed).length > 0) {
+            await updatePlacementParsedFieldsV2(targetPlacement!.name, validParsed);
+          }
         } else if (!parseError && extractedCount > 0) {
-          // Outcome E
+          setBackendVisaExtractionFailed(false);
           toast.info("Kuwait eVisa Attached — Partial Info Extracted", {
             description: `Visa attached to ${targetPlacement!.name}. Some visa details were extracted. Review and complete any missing terms.`,
           });
+          if (Object.keys(validParsed).length > 0) {
+            await updatePlacementParsedFieldsV2(targetPlacement!.name, validParsed);
+          }
         } else {
-          // Outcome B
-          toast.warning("eVisa Attached — Extraction Incomplete", {
-            description: "Visa attached successfully, but information could not be extracted. Please retry extraction or review the visa manually.",
+          setBackendVisaExtractionFailed(true);
+          toast.warning("Backend Extractor Returned No Fields", {
+            description: "The backend visa extractor did not return structured fields for this document. Please enter the fields manually below and notify the backend team to adjust the extractor.",
+            duration: 8000,
           });
         }
 
@@ -980,21 +1195,33 @@ export default function PlacementDocumentCenterPage() {
 
       const count = countExtractedVisaFields(combined);
       if (count >= 3) {
+        setBackendVisaExtractionFailed(false);
         toast.success("eVisa Info Extracted", {
-          description: "Visa document parsed successfully. Review extracted details below.",
+          description: `Visa document parsed successfully (${count} fields).`,
         });
+        if (activePlacement?.name && Object.keys(validParsed).length > 0) {
+          await updatePlacementParsedFieldsV2(activePlacement.name, validParsed);
+        }
       } else if (count > 0) {
+        setBackendVisaExtractionFailed(false);
         toast.info("Partial eVisa Extracted", {
           description: "Some details were extracted. Review and complete the remaining details manually.",
         });
+        if (activePlacement?.name && Object.keys(validParsed).length > 0) {
+          await updatePlacementParsedFieldsV2(activePlacement.name, validParsed);
+        }
       } else {
-        toast.warning("eVisa Extraction Incomplete", {
-          description: "Could not extract structured information from this visa document. Please review and enter details manually.",
+        setBackendVisaExtractionFailed(true);
+        toast.warning("Backend Extractor Returned No Fields", {
+          description: "The backend visa extractor did not return structured fields for this document. Please enter fields manually below and notify the backend team to adjust the extractor.",
+          duration: 8000,
         });
       }
     } catch (err: any) {
-      toast.error("eVisa Extraction Failed", {
-        description: err?.message || "Failed to extract details from visa document. Please review manually.",
+      setBackendVisaExtractionFailed(true);
+      toast.error("Backend Visa Extraction Failed", {
+        description: err?.message || "Failed to extract details from visa document. Please review manually and notify the backend team.",
+        duration: 8000,
       });
     } finally {
       setIsRetryingVisaExtraction(false);
@@ -1299,20 +1526,27 @@ export default function PlacementDocumentCenterPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
-                {isWordContract ? (
+                {/* Safe preview: only local blob PDFs load in iframe to prevent auto-downloading */}
+                {contractPreviewUrl?.startsWith("blob:") && contractFile?.type === "application/pdf" ? (
+                  <iframe
+                    src={contractPreviewUrl}
+                    title="Contract Document Viewer"
+                    className="w-full h-full rounded-lg border-0"
+                  />
+                ) : (contractPreviewUrl || previewFileUrl || activePlacement?.contract_file) ? (
                   <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 h-full w-full bg-white dark:bg-[#121216] rounded-lg border border-slate-200 dark:border-[#222228]">
                     <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center shadow-xs">
                       <FileText className="h-8 w-8 text-blue-700 dark:text-blue-400" />
                     </div>
                     <div className="space-y-1 max-w-sm">
                       <p className="text-xs font-bold text-slate-800 dark:text-zinc-100 truncate px-2">
-                        {contractFile?.name || (currentContractUrl ? (currentContractUrl.startsWith("file_") ? "Attached Word Contract" : currentContractUrl.split("/").pop()?.split("?")[0]) : "Word Contract Document")}
+                        {contractFile?.name || (currentContractUrl ? (currentContractUrl.startsWith("file_") ? "Attached Signed Contract" : currentContractUrl.split("/").pop()?.split("?")[0]) : "Signed Contract Document")}
                       </p>
                       <Badge variant="outline" className="text-[10px] uppercase font-mono border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30">
-                        Microsoft Word Document ({contractDownloadExt.toUpperCase()})
+                        {isWordContract ? `Microsoft Word Document (${contractDownloadExt.toUpperCase()})` : `Contract Document (${contractDownloadExt.toUpperCase()})`}
                       </Badge>
                       <p className="text-[11px] text-slate-500 dark:text-zinc-400 pt-1">
-                        Contract data was automatically extracted by the server parser. Review the extracted fields in the panel on the right.
+                        Contract document is attached to this placement. Extracted terms are editable directly in the excel-like panel on the right.
                       </p>
                     </div>
                     <div className="flex items-center gap-2 pt-2">
@@ -1336,17 +1570,11 @@ export default function PlacementDocumentCenterPage() {
                           className="text-xs h-7.5 px-3 bg-blue-900 hover:bg-blue-950 text-white"
                         >
                           <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                          Open Document
+                          Open in New Tab
                         </Button>
                       )}
                     </div>
                   </div>
-                ) : contractPreviewUrl || previewFileUrl ? (
-                  <iframe
-                    src={getFileDownloadUrl(contractPreviewUrl || previewFileUrl)}
-                    title="Contract Document Viewer"
-                    className="w-full h-full rounded-lg border-0"
-                  />
                 ) : (
                   <div className="text-center text-xs text-slate-400 space-y-2 p-6">
                     <FileText className="h-10 w-10 text-slate-300 dark:text-zinc-700 mx-auto" />
@@ -1354,7 +1582,7 @@ export default function PlacementDocumentCenterPage() {
                       No document loaded for preview
                     </p>
                     <p className="text-[11px]">
-                      Upload a contract to preview it here. The document will appear automatically after upload.
+                      Upload a contract to inspect or download.
                     </p>
                   </div>
                 )}
@@ -1472,6 +1700,25 @@ export default function PlacementDocumentCenterPage() {
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {isContractDirty && (
+                      <Badge variant="outline" className="text-[10px] text-amber-700 bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 py-0.5">
+                        Unsaved Edits
+                      </Badge>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveInlineContractFields}
+                      disabled={isSavingContractFields || (!isContractDirty && !activePlacement)}
+                      className="text-[11px] h-6 px-2.5 gap-1 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
+                    >
+                      {isSavingContractFields ? (
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      ) : (
+                        <Save className="h-2.5 w-2.5" />
+                      )}
+                      Save Terms
+                    </Button>
                     {(activePlacement?.contract_file || previewFileUrl || contractPreviewUrl) && (
                       <Button
                         type="button"
@@ -1495,10 +1742,11 @@ export default function PlacementDocumentCenterPage() {
                         variant="outline"
                         size="sm"
                         onClick={handleOpenEditModal}
-                        className="text-[11px] h-6 px-2 gap-1 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                        className="text-[11px] h-6 px-2 gap-1 border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300 hover:bg-slate-100"
+                        title="Open Advanced Modal Editor"
                       >
                         <Pencil className="h-2.5 w-2.5" />
-                        Edit Terms
+                        Modal
                       </Button>
                     )}
                   </div>
@@ -1512,18 +1760,7 @@ export default function PlacementDocumentCenterPage() {
                     <div className="flex-1">
                       <div className="font-semibold text-xs text-amber-900 dark:text-amber-200">Server Document Reader Missing</div>
                       <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5 leading-relaxed">
-                        {contractExtractionMeta.message || "This server cannot read contract files right now: its document reader is not installed. Enter the fields by hand, and tell support."}
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleOpenEditModal}
-                          className="h-6 text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium px-2.5 shadow-xs"
-                        >
-                          <Pencil className="h-3 w-3 mr-1" />
-                          Enter Terms Manually
-                        </Button>
+                        {contractExtractionMeta.message || "This server cannot read contract files right now: its document reader is not installed. You can type all fields directly in the cells below."}
                       </div>
                     </div>
                   </div>
@@ -1535,98 +1772,208 @@ export default function PlacementDocumentCenterPage() {
                     <div className="flex-1">
                       <div className="font-semibold text-xs text-blue-900 dark:text-blue-200">No Matching Fields Found</div>
                       <div className="text-[11px] text-blue-800 dark:text-blue-300 mt-0.5 leading-relaxed">
-                        {contractExtractionMeta.message || "Contract attached, but no fields matched destination layout. Please enter terms manually."}
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={handleOpenEditModal}
-                          className="h-6 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium px-2.5 shadow-xs"
-                        >
-                          <Pencil className="h-3 w-3 mr-1" />
-                          Enter Terms Manually
-                        </Button>
+                        {contractExtractionMeta.message || "Contract attached, but no fields matched destination layout. Please type terms directly below."}
                       </div>
                     </div>
                   </div>
                 )}
 
+                {/* Excel-like Editable Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Signed Date</span>
-                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.contract_signed_date || contractParseResult?.contract_signed_date || contractParseResult?.contract_date || "Not Extracted"}
-                    </span>
+                  {/* Signed Date */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Signed Date</span>
+                    <Input
+                      type="date"
+                      value={contractFields.contract_signed_date}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, contract_signed_date: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
                   </div>
 
-                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Salary</span>
-                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {(activePlacement?.contract_salary_amount || contractParseResult?.contract_salary_amount || contractParseResult?.salary_amount)
-                        ? `${activePlacement?.contract_salary_amount || contractParseResult?.contract_salary_amount || contractParseResult?.salary_amount} ${activePlacement?.contract_salary_currency || contractParseResult?.contract_salary_currency || contractParseResult?.salary_currency || (isKuwait ? "KWD" : "SAR")}`
-                        : "Not Set"}
-                    </span>
+                  {/* Salary Amount */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Salary Amount</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 1500"
+                      value={contractFields.contract_salary_amount}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, contract_salary_amount: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
                   </div>
 
-                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer / Sponsor</span>
-                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.employer_name || contractParseResult?.employer_name || contractParseResult?.sponsor_name || "Not Extracted"}
-                    </span>
+                  {/* Currency */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Currency</span>
+                    <select
+                      value={contractFields.contract_salary_currency}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, contract_salary_currency: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="w-full h-6.5 text-xs font-semibold px-1.5 py-0 rounded bg-white dark:bg-[#121217] border border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="SAR">SAR</option>
+                      <option value="KWD">KWD</option>
+                      <option value="USD">USD</option>
+                      <option value="ETB">ETB</option>
+                      <option value="AED">AED</option>
+                      <option value="QAR">QAR</option>
+                    </select>
                   </div>
 
-                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">
-                      {isKuwait ? "Employment Site" : "Contract Number"}
-                    </span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {isKuwait
-                        ? activePlacement?.employment_site || contractParseResult?.employment_site || "Kuwait"
-                        : activePlacement?.contract_number || contractParseResult?.contract_number || "Pending"}
-                    </span>
+                  {/* Contract Number */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Contract Number</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. CON-2026-001"
+                      value={contractFields.contract_number}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, contract_number: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
                   </div>
 
-                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Number</span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.visa_number || contractParseResult?.visa_number || visaParseResult?.visa_number || "Not Extracted"}
-                    </span>
+                  {/* Employer / Sponsor Name */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Employer / Sponsor</span>
+                    <Input
+                      type="text"
+                      placeholder="Employer name"
+                      value={contractFields.employer_name}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, employer_name: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
                   </div>
 
-                  {!isKuwait ? (
-                    <>
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer ID</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.employer_national_id || contractParseResult?.employer_national_id || contractParseResult?.sponsor_id || "Not Extracted"}
-                        </span>
-                      </div>
+                  {/* Employer National ID */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Employer ID / Civil ID</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 1029384756"
+                      value={contractFields.employer_national_id}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, employer_national_id: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Saudi Partner Agency</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.saudi_agency_name || contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Contract Duration</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.contract_duration || contractParseResult?.contract_duration || "2 Years"}
-                        </span>
-                      </div>
+                  {/* Employment Site */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Employment Site</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Kuwait City / Riyadh"
+                      value={contractFields.employment_site}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, employment_site: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Kuwait Partner Agency</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.kuwait_agency_name || contractParseResult?.kuwait_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  {/* Contract Duration */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Contract Duration</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 2 Years"
+                      value={contractFields.contract_duration}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, contract_duration: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
+
+                  {/* Visa Number */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Visa Number</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 1300987654"
+                      value={contractFields.visa_number}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, visa_number: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
+
+                  {/* Partner Agency */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">
+                      {isKuwait ? "Kuwait Partner Agency" : "Saudi Partner Agency"}
+                    </span>
+                    <Input
+                      type="text"
+                      placeholder="Agency Name"
+                      value={isKuwait ? contractFields.kuwait_agency_name : contractFields.saudi_agency_name}
+                      onChange={(e) => {
+                        if (isKuwait) {
+                          setContractFields((p) => ({ ...p, kuwait_agency_name: e.target.value }));
+                        } else {
+                          setContractFields((p) => ({ ...p, saudi_agency_name: e.target.value }));
+                        }
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
+
+                  {/* Agency License */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Agency License #</span>
+                    <Input
+                      type="text"
+                      placeholder="License #"
+                      value={isKuwait ? contractFields.kuwait_agency_license : contractFields.saudi_agency_license}
+                      onChange={(e) => {
+                        if (isKuwait) {
+                          setContractFields((p) => ({ ...p, kuwait_agency_license: e.target.value }));
+                        } else {
+                          setContractFields((p) => ({ ...p, saudi_agency_license: e.target.value }));
+                        }
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
+
+                  {/* Employer Address */}
+                  <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Employer Address</span>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Block 4, Street 12"
+                      value={contractFields.employer_address}
+                      onChange={(e) => {
+                        setContractFields((p) => ({ ...p, employer_address: e.target.value }));
+                        setIsContractDirty(true);
+                      }}
+                      className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                    />
+                  </div>
+                </div>
 
                   {activePlacement?.contract_file && (
                     <div className="p-1.5 px-2 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/40 flex items-center">
@@ -1643,7 +1990,6 @@ export default function PlacementDocumentCenterPage() {
                       </a>
                     </div>
                   )}
-                </div>
 
                 {/* Stage Advancement Action Gate */}
                 {activePlacement && (
@@ -1805,7 +2151,7 @@ export default function PlacementDocumentCenterPage() {
                           ) : (
                             <FileCheck2 className="h-3 w-3 mr-1.5" />
                           )}
-                          Attach to Placement
+                          Extract Visa Info
                         </Button>
 
                         <Button
@@ -1824,7 +2170,7 @@ export default function PlacementDocumentCenterPage() {
                   </CardContent>
                 </Card>
 
-                {/* Extracted Visa Fields Card */}
+                {/* Extracted Visa Fields Card with Excel-like inline editing */}
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardHeader className="py-2 px-3">
                     <div className="flex items-center justify-between">
@@ -1832,69 +2178,219 @@ export default function PlacementDocumentCenterPage() {
                         <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                         Extracted Visa Information
                       </CardTitle>
-                      {(activePlacement?.visa_file || previewFileUrl || visaPreviewUrl) && (
+                      <div className="flex items-center gap-1.5">
+                        {isVisaDirty && (
+                          <Badge variant="outline" className="text-[10px] text-amber-700 bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 py-0.5">
+                            Unsaved Edits
+                          </Badge>
+                        )}
                         <Button
                           type="button"
-                          variant="outline"
                           size="sm"
-                          disabled={isRetryingVisaExtraction || isVisaUploading}
-                          onClick={handleRetryVisaExtraction}
-                          className="text-[11px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          onClick={handleSaveInlineVisaFields}
+                          disabled={isSavingVisaFields || (!isVisaDirty && !activePlacement)}
+                          className="text-[11px] h-6 px-2.5 gap-1 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
                         >
-                          {isRetryingVisaExtraction ? (
+                          {isSavingVisaFields ? (
                             <Loader2 className="h-2.5 w-2.5 animate-spin" />
                           ) : (
-                            <RefreshCw className="h-2.5 w-2.5" />
+                            <Save className="h-2.5 w-2.5" />
                           )}
-                          Retry Extraction
+                          Save Visa Details
                         </Button>
-                      )}
+                        {(activePlacement?.visa_file || previewFileUrl || visaPreviewUrl) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isRetryingVisaExtraction || isVisaUploading}
+                            onClick={handleRetryVisaExtraction}
+                            className="text-[11px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          >
+                            {isRetryingVisaExtraction ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-2.5 w-2.5" />
+                            )}
+                            Extract Visa Info
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
 
                   <CardContent className="px-3 pb-3 pt-0 space-y-2">
+                    {/* Backend Extractor Gap Alert Banner */}
+                    {backendVisaExtractionFailed && (
+                      <div className="p-2.5 rounded-lg border border-amber-300/80 bg-amber-50/90 dark:bg-amber-950/30 dark:border-amber-800 text-amber-950 dark:text-amber-200 text-xs flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <span className="font-bold text-xs text-amber-900 dark:text-amber-200 block">
+                            Backend Extractor Returned No Fields
+                          </span>
+                          <span className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed block mt-0.5">
+                            The backend parser did not extract visa fields (Visa Number, Issue Date, Expiry Date, Sponsor) from this file. You can enter all fields manually below (excel-like), and notify the backend team to update the eVisa extraction parser.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Excel-like Editable Grid for Kuwait eVisa */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Ref / Number</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.visa_reference_number || activePlacement?.visa_number || visaParseResult?.visa_number || "Pending"}
-                        </span>
+                      {/* Visa Number */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Visa Number</span>
+                        <Input
+                          type="text"
+                          placeholder="e.g. 210987654321"
+                          value={visaFields.visa_number}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, visa_number: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Type</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.visa_type || visaParseResult?.visa_type || "Work Visa"}
-                        </span>
+                      {/* Visa Reference Number */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Visa Reference #</span>
+                        <Input
+                          type="text"
+                          placeholder="e.g. REF-12345"
+                          value={visaFields.visa_reference_number}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, visa_reference_number: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Issue Date</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.visa_issue_date || visaParseResult?.issue_date || "Not Extracted"}
-                        </span>
+                      {/* Visa Type */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Visa Type</span>
+                        <Input
+                          type="text"
+                          placeholder="e.g. Work Visa"
+                          value={visaFields.visa_type}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, visa_type: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Expiry Date</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.visa_expiry_date || visaParseResult?.expiry_date || "Not Extracted"}
-                        </span>
+                      {/* Issue Date */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Issue Date</span>
+                        <Input
+                          type="date"
+                          value={visaFields.visa_issue_date}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, visa_issue_date: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Name</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.employer_name || activePlacement?.sponsor_name || visaParseResult?.sponsor_name || "Not Extracted"}
-                        </span>
+                      {/* Expiry Date */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Expiry Date</span>
+                        <Input
+                          type="date"
+                          value={visaFields.visa_expiry_date}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, visa_expiry_date: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
 
-                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Civil ID</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.employer_national_id || activePlacement?.sponsor_civil_id || visaParseResult?.sponsor_id || "Not Extracted"}
-                        </span>
+                      {/* Sponsor Name */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Sponsor Name</span>
+                        <Input
+                          type="text"
+                          placeholder="Sponsor Full Name"
+                          value={visaFields.sponsor_name}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, sponsor_name: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
                       </div>
+
+                      {/* Sponsor Civil ID */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Sponsor Civil ID</span>
+                        <Input
+                          type="text"
+                          placeholder="e.g. 285010112345"
+                          value={visaFields.sponsor_id}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, sponsor_id: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
+                      </div>
+
+                      {/* Kuwait Agency Name */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Kuwait Partner Agency</span>
+                        <Input
+                          type="text"
+                          placeholder="Kuwait Agency Name"
+                          value={visaFields.kuwait_agency_name}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, kuwait_agency_name: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
+                      </div>
+
+                      {/* Kuwait Agency License */}
+                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
+                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Agency License #</span>
+                        <Input
+                          type="text"
+                          placeholder="License #"
+                          value={visaFields.kuwait_agency_license}
+                          onChange={(e) => {
+                            setVisaFields((p) => ({ ...p, kuwait_agency_license: e.target.value }));
+                            setIsVisaDirty(true);
+                          }}
+                          className="h-6.5 text-xs font-mono font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bottom Save Action Button */}
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        disabled={isSavingVisaFields || !activePlacement}
+                        onClick={handleSaveInlineVisaFields}
+                        className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs h-7.5 shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        {isSavingVisaFields ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Saving Visa Details...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-3 w-3" />
+                            Save & Confirm Visa Details
+                          </>
+                        )}
+                      </Button>
                     </div>
 
                     {activePlacement?.visa_file && (
@@ -1915,7 +2411,7 @@ export default function PlacementDocumentCenterPage() {
                 </Card>
               </div>
 
-              {/* Right Column: Embedded Preview */}
+              {/* Right Column: Embedded Preview (Safe against auto-download) */}
               <div>
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col">
                   <CardHeader className="py-2 px-3">
@@ -1924,14 +2420,16 @@ export default function PlacementDocumentCenterPage() {
                         <Eye className="h-3.5 w-3.5 text-slate-500" />
                         Visa Document Viewer
                       </span>
-                      {(visaPreviewUrl || previewFileUrl) && (
+                      {(visaPreviewUrl || previewFileUrl || activePlacement?.visa_file) && (
                         <div className="flex items-center gap-1.5">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const url = getFileDownloadUrl(visaPreviewUrl || previewFileUrl);
+                              const target = visaPreviewUrl || previewFileUrl || activePlacement?.visa_file;
+                              if (!target) return;
+                              const url = getFileDownloadUrl(target);
                               const win = window.open(url, "_blank");
                               win?.focus();
                             }}
@@ -1945,7 +2443,9 @@ export default function PlacementDocumentCenterPage() {
                             type="button"
                             size="sm"
                             onClick={() => {
-                              const url = getFileDownloadUrl(visaPreviewUrl || previewFileUrl);
+                              const target = visaPreviewUrl || previewFileUrl || activePlacement?.visa_file;
+                              if (!target) return;
+                              const url = getFileDownloadUrl(target);
                               const a = document.createElement("a");
                               a.href = url;
                               a.download = `eVisa_${applicantId || "candidate"}.pdf`;
@@ -1971,12 +2471,69 @@ export default function PlacementDocumentCenterPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
-                    {visaPreviewUrl || previewFileUrl ? (
+                    {/* Safe preview: only local blob loads in iframe to prevent auto-downloading */}
+                    {visaPreviewUrl?.startsWith("blob:") ? (
                       <iframe
-                        src={getFileDownloadUrl(visaPreviewUrl || previewFileUrl)}
+                        src={visaPreviewUrl}
                         title="Kuwait eVisa Viewer"
                         className="w-full h-full rounded-lg border-0"
                       />
+                    ) : (visaPreviewUrl || previewFileUrl || activePlacement?.visa_file) ? (
+                      <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 h-full w-full bg-white dark:bg-[#121216] rounded-lg border border-slate-200 dark:border-[#222228]">
+                        <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center shadow-xs">
+                          <Stamp className="h-8 w-8 text-emerald-700 dark:text-emerald-400" />
+                        </div>
+                        <div className="space-y-1 max-w-sm">
+                          <p className="text-xs font-bold text-slate-800 dark:text-zinc-100 truncate px-2">
+                            {visaFile?.name || "Kuwait eVisa Document"}
+                          </p>
+                          <Badge variant="outline" className="text-[10px] uppercase font-mono border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/30">
+                            Kuwait Electronic Visa (eVisa)
+                          </Badge>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 pt-1">
+                            eVisa document is securely stored. Use manual download or open in a new tab below.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 pt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const target = visaPreviewUrl || previewFileUrl || activePlacement?.visa_file;
+                              if (!target) return;
+                              const url = getFileDownloadUrl(target);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `Kuwait_eVisa_${applicantId || "candidate"}.pdf`;
+                              a.target = "_blank";
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              toast.success("Visa document downloaded!");
+                            }}
+                            className="text-xs h-7.5 px-3 border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            Download eVisa
+                          </Button>
+                          {(visaPreviewUrl || previewFileUrl || activePlacement?.visa_file) && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                const target = visaPreviewUrl || previewFileUrl || activePlacement?.visa_file;
+                                if (!target) return;
+                                window.open(getFileDownloadUrl(target), "_blank");
+                              }}
+                              className="text-xs h-7.5 px-3 bg-emerald-900 hover:bg-emerald-950 text-white"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                              Open in New Tab
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     ) : (
                       <div className="text-center text-xs text-slate-400 space-y-2 p-6">
                         <Stamp className="h-10 w-10 text-slate-300 dark:text-zinc-700 mx-auto" />
@@ -1984,7 +2541,7 @@ export default function PlacementDocumentCenterPage() {
                           No visa document loaded for preview
                         </p>
                         <p className="text-[11px]">
-                          Choose an eVisa document to preview here.
+                          Choose an eVisa document to preview or attach.
                         </p>
                       </div>
                     )}

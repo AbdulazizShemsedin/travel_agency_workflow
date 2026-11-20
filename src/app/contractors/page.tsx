@@ -101,6 +101,7 @@ export default function ContractorsPage() {
   const [showAgentPassword, setShowAgentPassword] = React.useState(false);
   const [copiedCredentials, setCopiedCredentials] = React.useState(false);
   const [justResetPassword, setJustResetPassword] = React.useState<string | null>(null);
+  const [sessionPasswords, setSessionPasswords] = React.useState<Record<string, string>>({});
 
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
@@ -263,6 +264,12 @@ export default function ContractorsPage() {
       resetEmployeePasswordV2(payload.userEmail, payload.newPassword),
     onSuccess: (_, variables) => {
       setJustResetPassword(variables.newPassword);
+      setSessionPasswords((prev) => {
+        const next = { ...prev };
+        if (variables.userEmail) next[variables.userEmail.toLowerCase().trim()] = variables.newPassword;
+        if (credentialsContractor?.name) next[credentialsContractor.name] = variables.newPassword;
+        return next;
+      });
       setAgentNewPassword("");
       setConfirmAgentPassword("");
       toast.success("Agent portal password updated successfully!");
@@ -294,12 +301,13 @@ export default function ContractorsPage() {
     setConfirmAgentPassword("");
     setShowAgentPassword(false);
     setCopiedCredentials(false);
-    setJustResetPassword(null);
+    const targetUser = (c.user || c.user_email || c.email || "").toLowerCase().trim();
+    const cachedPwd = sessionPasswords[targetUser] || sessionPasswords[c.name] || null;
+    setJustResetPassword(cachedPwd);
   };
 
   const handleCloseCredentials = () => {
     setCredentialsContractor(null);
-    setJustResetPassword(null);
     setAgentNewPassword("");
     setConfirmAgentPassword("");
     setShowAgentPassword(false);
@@ -915,16 +923,15 @@ export default function ContractorsPage() {
                 <Label htmlFor="edit_email" className="text-xs font-semibold">
                   Portal Login Email / Account
                 </Label>
-                {/* The agency's e-mail is its login; the backend refuses a change here. */}
                 <Input
                   id="edit_email"
                   type="email"
-                  readOnly
-                  disabled
                   value={editFormData.email}
-                  className="bg-slate-50 dark:bg-[#16161d] text-slate-500"
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  placeholder="e.g. agency@example.com"
+                  className="font-mono text-xs"
                 />
-                <p className="text-[10px] text-slate-400">The login e-mail cannot be changed here.</p>
+                <p className="text-[10px] text-slate-400">Foreign agency login and communication email address.</p>
               </div>
 
               <div className="space-y-1">
@@ -1049,7 +1056,7 @@ export default function ContractorsPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      New Password Issued Successfully
+                      Active Portal Password (Set in This Session)
                     </span>
                     <Button
                       type="button"
@@ -1057,7 +1064,7 @@ export default function ContractorsPage() {
                       variant="outline"
                       onClick={() => {
                         navigator.clipboard.writeText(justResetPassword);
-                        toast.success("New password copied to clipboard!");
+                        toast.success("Password copied to clipboard!");
                       }}
                       className="h-6 text-[11px] px-2 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                     >
@@ -1068,7 +1075,7 @@ export default function ContractorsPage() {
                     {justResetPassword}
                   </div>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-sans">
-                    Please copy and share this password with the foreign agency representative now. Once you close this modal, plain text cannot be viewed again.
+                    This password was set in the current session and persists while using this page. You can copy and share it with the agency representative.
                   </p>
                 </div>
               )}

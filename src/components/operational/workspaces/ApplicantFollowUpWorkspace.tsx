@@ -147,7 +147,35 @@ export function ApplicantFollowUpWorkspace({
   // The server's row is the truth. Every change here reloads it, so a newer row replaces the local
   // copy whole: an undo or another user's change (a stage going back, a cleared field) shows at once.
   React.useEffect(() => {
-    if (row) setCurrentRow(row);
+    if (row) {
+      setCurrentRow((prev) => {
+        if (!prev) return row;
+        // Preserve locally saved police ashara values if incoming row came unhydrated or defaulted to Pending
+        const asharaStatus =
+          row.policeAsharaStatus && row.policeAsharaStatus !== "Pending"
+            ? row.policeAsharaStatus
+            : prev.policeAsharaStatus && prev.policeAsharaStatus !== "Pending"
+            ? prev.policeAsharaStatus
+            : row.policeAsharaStatus;
+        const asharaApptDate = row.policeAsharaAppointmentDate || prev.policeAsharaAppointmentDate;
+        const asharaRemark = row.policeAsharaRemark || prev.policeAsharaRemark;
+
+        return {
+          ...row,
+          policeAsharaStatus: asharaStatus,
+          policeAsharaAppointmentDate: asharaApptDate,
+          policeAsharaRemark: asharaRemark,
+          lms: row.lms
+            ? {
+                ...row.lms,
+                police_ashara_status: asharaStatus,
+                police_ashara_appointment_date: asharaApptDate,
+                police_ashara_remark: asharaRemark,
+              }
+            : row.lms,
+        };
+      });
+    }
   }, [row]);
 
   // Handle ESC key to close
@@ -346,6 +374,9 @@ export function ApplicantFollowUpWorkspace({
   const [teshirInjazIdVal, setTeshirInjazIdVal] = React.useState("");
   const [teshirApptDateVal, setTeshirApptDateVal] = React.useState("");
   const [telesignRefNoVal, setTelesignRefNoVal] = React.useState("");
+  const [telesignStatusVal, setTelesignStatusVal] = React.useState("Pending");
+  const [telesignDateStartedVal, setTelesignDateStartedVal] = React.useState("");
+  const [telesignDateCompletedVal, setTelesignDateCompletedVal] = React.useState("");
 
   // Kuwait Placement LMIS direct editable fields
   const [employerCity, setEmployerCity] = React.useState("");
@@ -437,6 +468,9 @@ export function ApplicantFollowUpWorkspace({
       syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id, teshirInjazIdVal, setTeshirInjazIdVal);
       syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id || (currentRow.injaz as any)?.reference_number, telesignRefNoVal, setTelesignRefNoVal);
       syncDate(currentRow.appointmentDate || currentRow.teshirAppointmentDate || currentRow.injaz?.appointment_date, teshirApptDateVal, setTeshirApptDateVal);
+      syncDate(currentRow.injaz?.date_started, telesignDateStartedVal, setTelesignDateStartedVal);
+      syncDate(currentRow.injaz?.date_completed, telesignDateCompletedVal, setTelesignDateCompletedVal);
+      syncStr(currentRow.teshirStatus || currentRow.injaz?.status, telesignStatusVal, setTelesignStatusVal);
 
       // Kuwait LMIS Placement fields
       syncStr((currentRow.plc as any)?.employer_city, employerCity, setEmployerCity);
@@ -863,6 +897,124 @@ export function ApplicantFollowUpWorkspace({
     }
   };
 
+  const handleSaveTelesignStatus = async (newStatus: string) => {
+    if (!injazStepName || !canEditTaeshir) return;
+    try {
+      setSavingField((prev) => ({ ...prev, telesignStatus: true }));
+      if (newStatus === "Complete" || newStatus === "Completed") {
+        await completeClearanceStepV2(
+          injazStepName,
+          telesignRefNoVal.trim() || undefined,
+          undefined,
+          telesignDateCompletedVal || undefined
+        );
+      } else if (newStatus === "In Progress") {
+        const currentStepStatus = currentRow?.injaz?.status || currentRow?.teshirStatus;
+        if (currentStepStatus === "Complete" || currentStepStatus === "Completed") {
+          await reopenClearanceStepV2(injazStepName, "Reopened to In Progress");
+        } else {
+          await startClearanceStepV2(injazStepName);
+        }
+      } else if (newStatus === "Pending") {
+        const currentStepStatus = currentRow?.injaz?.status || currentRow?.teshirStatus;
+        if (currentStepStatus === "Complete" || currentStepStatus === "Completed") {
+          await reopenClearanceStepV2(injazStepName, "Reopened to Pending");
+        }
+      }
+      setTelesignStatusVal(newStatus);
+      setCurrentRow((prev) =>
+        prev
+          ? {
+              ...prev,
+              teshirStatus: newStatus,
+              injaz: prev.injaz ? { ...prev.injaz, status: newStatus } : prev.injaz,
+            }
+          : null
+      );
+      triggerSavedFeedback("telesignStatus");
+      toast.success(`Telesign status updated to ${newStatus}`);
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, telesignStatus: false }));
+    }
+  };
+
+  const handleSaveTelesignDateStarted = async (dateVal: string) => {
+    if (!injazStepName || !canEditTaeshir) return;
+    const currentVal = (currentRow?.injaz?.date_started || "").split(" ")[0];
+    if (dateVal === currentVal && savedField.telesignDateStarted) return;
+    try {
+      setSavingField((prev) => ({ ...prev, telesignDateStarted: true }));
+      const currentStepStatus = currentRow?.injaz?.status || currentRow?.teshirStatus;
+      if (currentStepStatus === "Pending") {
+        await startClearanceStepV2(injazStepName);
+      }
+      setTelesignDateStartedVal(dateVal);
+      setCurrentRow((prev) =>
+        prev
+          ? {
+              ...prev,
+              teshirStatus: currentStepStatus === "Pending" ? "In Progress" : prev.teshirStatus,
+              injaz: prev.injaz
+                ? {
+                    ...prev.injaz,
+                    date_started: dateVal,
+                    status: currentStepStatus === "Pending" ? "In Progress" : prev.injaz.status,
+                  }
+                : prev.injaz,
+            }
+          : null
+      );
+      triggerSavedFeedback("telesignDateStarted");
+      toast.success("Date started saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, telesignDateStarted: false }));
+    }
+  };
+
+  const handleSaveTelesignDateCompleted = async (dateVal: string) => {
+    if (!injazStepName || !canEditTaeshir) return;
+    const currentVal = (currentRow?.injaz?.date_completed || "").split(" ")[0];
+    if (dateVal === currentVal && savedField.telesignDateCompleted) return;
+    try {
+      setSavingField((prev) => ({ ...prev, telesignDateCompleted: true }));
+      await completeClearanceStepV2(
+        injazStepName,
+        telesignRefNoVal.trim() || undefined,
+        undefined,
+        dateVal || undefined
+      );
+      setTelesignDateCompletedVal(dateVal);
+      setCurrentRow((prev) =>
+        prev
+          ? {
+              ...prev,
+              teshirStatus: "Complete",
+              injaz: prev.injaz
+                ? {
+                    ...prev.injaz,
+                    date_completed: dateVal,
+                    status: "Complete",
+                  }
+                : prev.injaz,
+            }
+          : null
+      );
+      triggerSavedFeedback("telesignDateCompleted");
+      toast.success("Date completed saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, telesignDateCompleted: false }));
+    }
+  };
+
   const handleStartTelesign = async () => {
     if (!injazStepName || !canEditTaeshir) return;
     try {
@@ -893,23 +1045,29 @@ export function ApplicantFollowUpWorkspace({
     }
     try {
       setIsSavingPoliceAshara(true);
-      await recordPoliceAsharaV2(lmsStepName, {
+      const res = await recordPoliceAsharaV2(lmsStepName, {
         police_ashara_status: policeAsharaStatus || "Pending",
         police_ashara_appointment_date: policeAsharaApptDate || undefined,
         police_ashara_remark: policeAsharaRemark.trim() || undefined,
       });
+      const updatedStep = res?.message || res;
+      const finalStatus = updatedStep?.police_ashara_status || policeAsharaStatus || "Pending";
+      const finalDate = updatedStep?.police_ashara_appointment_date || policeAsharaApptDate || undefined;
+      const finalRemark = updatedStep?.police_ashara_remark || policeAsharaRemark.trim() || undefined;
+
       toast.success("Kuwait Police Ashara details recorded successfully");
       setIsPoliceAsharaOpen(false);
       setCurrentRow((prev) => prev ? {
         ...prev,
-        policeAsharaStatus: policeAsharaStatus || "Pending",
-        policeAsharaAppointmentDate: policeAsharaApptDate || undefined,
-        policeAsharaRemark: policeAsharaRemark.trim() || undefined,
+        policeAsharaStatus: finalStatus,
+        policeAsharaAppointmentDate: finalDate,
+        policeAsharaRemark: finalRemark,
         lms: prev.lms ? {
           ...prev.lms,
-          police_ashara_status: policeAsharaStatus || "Pending",
-          police_ashara_appointment_date: policeAsharaApptDate || undefined,
-          police_ashara_remark: policeAsharaRemark.trim() || undefined,
+          ...updatedStep,
+          police_ashara_status: finalStatus,
+          police_ashara_appointment_date: finalDate,
+          police_ashara_remark: finalRemark,
         } : prev.lms,
       } : null);
       refreshAll();
@@ -964,17 +1122,20 @@ export function ApplicantFollowUpWorkspace({
   const handleSaveKuwaitEvisaField = async (fieldKey: string, value: string) => {
     if (!placementName || !canEditEmbassy) return;
     const val = value.trim();
+    const currentVal = String((currentRow?.plc as any)?.[fieldKey] || "").trim();
+    if (val === currentVal) return;
+    if (!val && !currentVal) return;
     try {
       setSavingField((prev) => ({ ...prev, [fieldKey]: true }));
       await updatePlacementParsedFieldsV2(placementName, {
-        [fieldKey]: val || undefined,
+        [fieldKey]: val,
       });
       setCurrentRow((prev) => prev ? {
         ...prev,
         plc: prev.plc ? {
           ...prev.plc,
-          [fieldKey]: val || undefined,
-        } : prev.plc,
+          [fieldKey]: val,
+        } : { [fieldKey]: val },
       } : null);
       triggerSavedFeedback(fieldKey);
       toast.success("eVisa field saved");
@@ -1049,8 +1210,9 @@ export function ApplicantFollowUpWorkspace({
   const handleSaveEmbassyVisaNumber = async () => {
     if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaNumberVal.trim();
-    const currentVal = (currentRow?.visaNumber || "").trim();
-    if (val === currentVal && savedField.embassyVisaNumber) return;
+    const currentVal = (currentRow?.visaNumber || (currentRow?.plc as any)?.visa_number || "").trim();
+    if (val === currentVal) return;
+    if (!val && !currentVal) return;
     try {
       setSavingField((prev) => ({ ...prev, embassyVisaNumber: true }));
       await updatePlacementParsedFieldsV2(placementName, {
@@ -1076,8 +1238,9 @@ export function ApplicantFollowUpWorkspace({
   const handleSaveEmbassyVisaIssueDate = async () => {
     if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaIssueDateVal.trim();
-    const currentVal = (currentRow?.visaIssueDate || "").trim();
-    if (val === currentVal && savedField.embassyVisaIssueDate) return;
+    const currentVal = (currentRow?.visaIssueDate || (currentRow?.plc as any)?.visa_issue_date || "").trim();
+    if (val === currentVal) return;
+    if (!val && !currentVal) return;
     try {
       setSavingField((prev) => ({ ...prev, embassyVisaIssueDate: true }));
       await updatePlacementParsedFieldsV2(placementName, {
@@ -1104,7 +1267,8 @@ export function ApplicantFollowUpWorkspace({
     if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaExpiryDateVal.trim();
     const currentVal = (currentRow?.visaDeadline || (currentRow?.plc as any)?.visa_deadline || (currentRow?.plc as any)?.visa_expiry_date || "").trim();
-    if (val === currentVal && savedField.embassyVisaExpiryDate) return;
+    if (val === currentVal) return;
+    if (!val && !currentVal) return;
     try {
       setSavingField((prev) => ({ ...prev, embassyVisaExpiryDate: true }));
       await updatePlacementParsedFieldsV2(placementName, {
@@ -1118,7 +1282,7 @@ export function ApplicantFollowUpWorkspace({
         plc: prev.plc ? { ...prev.plc, visa_deadline: val, visa_expiry_date: val } : { visa_deadline: val, visa_expiry_date: val } 
       } : null);
       triggerSavedFeedback("embassyVisaExpiryDate");
-      toast.success("Visa valid until date saved");
+      toast.success("Visa expiry date saved");
       refreshAll();
     } catch (err) {
       toast.error(formatCleanErrorMessage(err));
@@ -1974,38 +2138,129 @@ export function ApplicantFollowUpWorkspace({
 
                         {/* Field 2: Telesign Status */}
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Telesign Status
-                          </Label>
-                          <div className={cn(
-                            "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
-                            (isTeshirCompleted || currentRow.teshirStatus === "Completed" || resolvedInjazStep?.status === "Complete")
-                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
-                              : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
-                          )}>
-                            <span>{isTeshirCompleted ? "Complete" : (currentRow.teshirStatus || resolvedInjazStep?.status || "Pending")}</span>
-                            {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Telesign Status
+                            </Label>
+                            {savingField.telesignStatus && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.telesignStatus && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
                           </div>
+                          {canEditTaeshir ? (
+                            <select
+                              value={
+                                isTeshirCompleted || telesignStatusVal === "Complete" || telesignStatusVal === "Completed"
+                                  ? "Complete"
+                                  : telesignStatusVal === "In Progress"
+                                  ? "In Progress"
+                                  : "Pending"
+                              }
+                              onChange={(e) => handleSaveTelesignStatus(e.target.value)}
+                              disabled={savingField.telesignStatus}
+                              className={cn(
+                                "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold transition-colors cursor-pointer",
+                                savedField.telesignStatus && "border-emerald-500 ring-1 ring-emerald-500/20",
+                                (isTeshirCompleted || telesignStatusVal === "Complete" || telesignStatusVal === "Completed")
+                                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
+                                  : telesignStatusVal === "In Progress"
+                                  ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border-indigo-300"
+                                  : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                              )}
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Complete">Complete</option>
+                            </select>
+                          ) : (
+                            <div className={cn(
+                              "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
+                              (isTeshirCompleted || currentRow.teshirStatus === "Completed" || resolvedInjazStep?.status === "Complete")
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
+                                : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                            )}>
+                              <span>{isTeshirCompleted ? "Complete" : (currentRow.teshirStatus || resolvedInjazStep?.status || "Pending")}</span>
+                              {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
+                            </div>
+                          )}
                         </div>
 
                         {/* Field 3: Date Started */}
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Date Started
-                          </Label>
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
-                            <span className="truncate">{resolvedInjazStep?.date_started || "—"}</span>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Date Started
+                            </Label>
+                            {savingField.telesignDateStarted && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.telesignDateStarted && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
                           </div>
+                          {canEditTaeshir ? (
+                            <Input
+                              type="date"
+                              value={telesignDateStartedVal || ""}
+                              onChange={(e) => setTelesignDateStartedVal(e.target.value)}
+                              onBlur={(e) => handleSaveTelesignDateStarted(e.target.value)}
+                              disabled={savingField.telesignDateStarted}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium",
+                                savedField.telesignDateStarted && "border-emerald-500 ring-1 ring-emerald-500/20"
+                              )}
+                            />
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                              <span className="truncate">{resolvedInjazStep?.date_started || "—"}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Field 4: Date Completed */}
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Date Completed
-                          </Label>
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
-                            <span className="truncate">{resolvedInjazStep?.date_completed || "—"}</span>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Date Completed
+                            </Label>
+                            {savingField.telesignDateCompleted && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.telesignDateCompleted && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
                           </div>
+                          {canEditTaeshir ? (
+                            <Input
+                              type="date"
+                              value={telesignDateCompletedVal || ""}
+                              onChange={(e) => setTelesignDateCompletedVal(e.target.value)}
+                              onBlur={(e) => handleSaveTelesignDateCompleted(e.target.value)}
+                              disabled={savingField.telesignDateCompleted}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium",
+                                savedField.telesignDateCompleted && "border-emerald-500 ring-1 ring-emerald-500/20"
+                              )}
+                            />
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                              <span className="truncate">{resolvedInjazStep?.date_completed || "—"}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Field 5: Telesign Remark (spans 2 columns) */}
@@ -4239,6 +4494,38 @@ export function ApplicantFollowUpWorkspace({
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
+              <Label className="text-xs font-semibold">Telesign Status</Label>
+              <select
+                value={telesignStatusVal}
+                onChange={(e) => setTelesignStatusVal(e.target.value)}
+                className="w-full h-8 px-2 text-xs border rounded-md font-bold bg-white dark:bg-[#16161d]"
+              >
+                <option value="Complete">Complete</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Date Started</Label>
+                <Input
+                  type="date"
+                  value={telesignDateStartedVal || ""}
+                  onChange={(e) => setTelesignDateStartedVal(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Date Completed</Label>
+                <Input
+                  type="date"
+                  value={telesignDateCompletedVal || ""}
+                  onChange={(e) => setTelesignDateCompletedVal(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs font-semibold">Telesign Reference Number (Optional)</Label>
               <Input
                 type="text"
@@ -4246,6 +4533,16 @@ export function ApplicantFollowUpWorkspace({
                 onChange={(e) => setTelesignRefNoVal(e.target.value)}
                 placeholder="e.g. TEL-892341"
                 className="h-8 text-xs font-mono uppercase"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Telesign Remark (Optional)</Label>
+              <Input
+                type="text"
+                value={teshirRemarkVal}
+                onChange={(e) => setTeshirRemarkVal(e.target.value)}
+                placeholder="Remarks or notes..."
+                className="h-8 text-xs"
               />
             </div>
           </div>
@@ -4263,10 +4560,17 @@ export function ApplicantFollowUpWorkspace({
                 }
                 try {
                   setIsFinishingTelesign(true);
-                  if (telesignRefNoVal.trim()) {
-                    await setStepRemarksV2(injazStepName, `Ref: ${telesignRefNoVal.trim()}`);
+                  if (teshirRemarkVal.trim()) {
+                    await setStepRemarksV2(injazStepName, teshirRemarkVal.trim());
                   }
-                  await completeClearanceStepV2(injazStepName);
+                  const finalDateCompleted =
+                    telesignDateCompletedVal || new Date().toISOString().split("T")[0];
+                  await completeClearanceStepV2(
+                    injazStepName,
+                    telesignRefNoVal.trim() || undefined,
+                    undefined,
+                    finalDateCompleted
+                  );
                   toast.success("Telesign stage completed successfully!");
                   setIsTelesignFinishOpen(false);
                   setCurrentRow((prev) =>
@@ -4274,7 +4578,16 @@ export function ApplicantFollowUpWorkspace({
                       ? {
                           ...prev,
                           teshirStatus: "Complete",
-                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete", date_completed: new Date().toISOString() } : undefined,
+                          injaz: prev.injaz
+                            ? {
+                                ...prev.injaz,
+                                status: "Complete",
+                                date_completed: finalDateCompleted,
+                                date_started: telesignDateStartedVal || prev.injaz.date_started,
+                                reference_no: telesignRefNoVal.trim(),
+                                remarks: teshirRemarkVal.trim(),
+                              }
+                            : undefined,
                         }
                       : null
                   );

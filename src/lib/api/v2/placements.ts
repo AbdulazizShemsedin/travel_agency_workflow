@@ -663,13 +663,26 @@ export async function updatePlacementParsedFieldsV2(
     [key: string]: any;
   }
 ): Promise<V2PlacementRecord> {
+  const cleanFields: Record<string, any> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined && v !== null) {
+      cleanFields[k] = typeof v === "string" ? v.trim() : v;
+    }
+  }
+
+  // Prevent sending an empty JSON payload that causes backend 417 "No editable field supplied"
+  const hasSuppliedField = Object.keys(cleanFields).length > 0;
+  if (!hasSuppliedField) {
+    return { name: placementName } as V2PlacementRecord;
+  }
+
   const result = await requestV2<V2PlacementRecord | { message: V2PlacementRecord }>(
     "/api/method/agency_tracking.api.placement.write?op=update_placement_parsed_fields",
     {
       method: "POST",
       body: {
         placement_name: placementName,
-        ...fields,
+        ...cleanFields,
       },
     }
   );

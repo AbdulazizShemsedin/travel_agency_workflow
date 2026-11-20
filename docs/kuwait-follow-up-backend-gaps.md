@@ -84,6 +84,77 @@ All frontend components, workspaces, column renderers, and detail views have bee
   - Unapproved `Airline Carrier` input has been completely removed from the Flight Ticket & Departure Card.
   - Terminal records for Departed candidates (`isPlacementDeparted`) lock Ticket Number, Flight Date, Flight Time, and Departure Status into read-only badges with a Lock icon, preventing accidental post-departure mutation or regressing departed records.
 
+### 1.8 Kuwait eVisa Document Extraction (`parse_visa_file` / `/v1/parse/visa`) & Backend Limitations
+- **Status**: Backend parser integrated with frontend Excel-like manual fallback and error notification.
+- **Backend Architecture**:
+  - Kuwait eVisa parsing is called via `parseVisaFileV2` -> `POST /api/method/agency_tracking.api.document.write?op=parse_visa_file` (or `/v1/parse/visa`).
+  - The Go backend uses OCR/text extraction to detect fields (`visa_number`, `visa_type`, `visa_issue_date`, `visa_expiry_date`, `sponsor_name`, `sponsor_id`, `kuwait_agency_name`, `kuwait_agency_license`).
+- **Observed Limitation**:
+  - Certain Kuwait eVisa document templates (especially low-resolution scans, photo captures, or newer Kuwait Ministry of Interior layout variants) yield 0 extracted fields (`fields_found: []` or empty properties).
+- **Frontend Handling**:
+  - Added primary **"Extract Visa Info"** button to the Kuwait eVisa attachment card and a dedicated **"Extract Visa Info"** action button in the card header.
+  - Added real-time gap detection: when the backend extractor returns 0 structured fields, the frontend displays an informational warning banner:
+    *"Backend Extractor Notice: The backend parser did not extract visa fields (Visa Number, Issue Date, Expiry Date, Sponsor) from this file. You can enter all fields manually below (excel-like), and notify the backend team to update the eVisa extraction parser."*
+  - Added direct, excel-like inline editable cells for all 9 visa fields (`visa_number`, `visa_reference_number`, `visa_type`, `visa_issue_date`, `visa_expiry_date`, `sponsor_name`, `sponsor_id`, `kuwait_agency_name`, `kuwait_agency_license`) with native HTML5 calendar date pickers, so staff can input and correct data instantly without opening a modal.
+  - Added a dedicated **"Save & Confirm Visa Details"** button that persists edits to the Placement via `updatePlacementParsedFieldsV2` and syncs them to the Applicant record.
+
+### 1.9 Foreign Agency Credentials Architecture & Password Persistence
+- **Status**: Architectural limitation of one-way salted password hashing.
+- **Backend Architecture**:
+  - Password management uses `agency_tracking.api.employee.write?op=reset_employee_password` (`resetEmployeePasswordV2`).
+  - In modern web security, Frappe and Go backends hash passwords using one-way cryptographic algorithms (`bcrypt` / `argon2` / `tabUser`).
+  - The backend database **never** stores or returns plain-text passwords in `get_contractor` or `list_contractors` queries.
+- **Why Passwords Disappear on Reopening**:
+  - Previously, `handleOpenCredentials` cleared the temporary password (`setJustResetPassword(null)`), causing the modal to appear as if the password was lost immediately after closing and reopening.
+  - Furthermore, after a page reload or from another browser, the backend cannot return the password because it only possesses the one-way cryptographic hash.
+- **Frontend Solution & What the Backend Needs to Fix (If Plain-text Retrieval is Intended)**:
+  - **Frontend Fix**: Added an in-memory session password cache (`sessionPasswords`) in `src/app/contractors/page.tsx`. When an administrator sets or resets an agency's password, it is cached for the current session. Reopening the Credentials modal for that agency restores the active password with a Copy button and guidance text.
+  - **Editable Login Email**: Added an editable `Portal Login Email` input to the Edit Agency modal so administrators can view and update the agency's login account without being locked out.
+  - **Backend Recommendation (If Persistent Plaintext Recall Is Required)**: If business requirements demand that foreign agency passwords remain readable across hard browser reloads and different devices, the backend team must add an encrypted credentials vault field on the `Contractor` DocType (e.g., `encrypted_portal_password` using AES-256-GCM decrypted only on authorized admin requests), as standard Frappe/Go user auth will never return plain-text passwords.
+
+### 1.10 Placement Document Center Auto-Download Circumvention
+- **Root Cause**:
+  - In `src/app/applicants/[id]/contractor-doc/page.tsx`, the document viewer previously passed `getFileDownloadUrl(url)` directly as the `src` attribute of an `<iframe>`.
+  - The backend proxy (`/api/method/agency_tracking.api.file.read?op=download_file&file_id=...`) responds with `Content-Disposition: attachment; filename="..."`.
+  - Under RFC 6266, when a browser loads an `<iframe>` whose response has `Content-Disposition: attachment` (or when loading binary `.docx` files), the browser automatically downloads the file to the user's Downloads directory upon page visit or tab switch.
+- **Frontend Fix**:
+  - Only local blob URLs (`blob:...`) for PDF files are loaded in `<iframe src={...}>` (which renders natively without attachment headers).
+  - For server-stored documents (`file_...` or remote download endpoints) across both Employment Contract and Kuwait eVisa tabs, the viewer now renders a dedicated interactive Document Card showing:
+    - File icon and format badge (`Microsoft Word Document` / `PDF Contract` / `Kuwait eVisa`)
+    - File name and verified attachment status
+    - Explicit **"Download Document"** button (triggers manual download ONLY when clicked)
+    - Explicit **"Open in New Tab"** button (opens document in new tab ONLY when clicked)
+  - Automatic background downloading is 100% eliminated.
+
+### 1.11 Kuwait Police Ashara Reverting Root Cause & Hydration Fix
+- **Problem**:
+  - In `ApplicantFollowUpWorkspace`, after setting Police Ashara status to "Completed" and saving an appointment date, the UI reverted back to "Pending" and the date became blank upon query refetch.
+- **Backend Root Cause**:
+  - Authoritative spec `src/Assets/03-clearance-and-corridor-contract.md` (lines 88-89): `list_my_clearance_steps` deliberately returns a lightweight 6-field projection (`name`, `placement`, `step_type`, `status`, `sequence_order`, `is_mandatory`) and omits all sub-flow fields (`police_ashara_status`, `police_ashara_appointment_date`, `police_ashara_remark`, `wakala_status`, etc.).
+  - On refetch (`refreshAll()`), `fetchOperationalWorkspaceDataV2` mapped `policeAsharaStatus` from the unhydrated `lmsStep` list item, which lacked `police_ashara_*` properties and defaulted back to `"Pending"`.
+- **Frontend Fix**:
+  - In `src/lib/api/v2/operational.ts`, `fetchOperationalWorkspaceDataV2` now calls `getClearanceStepDocV2(stepName)` whenever `single || singleId || isKuwait` is true to hydrate `lmsStep`, `injazStep`, and `embassyStep` with their full Frappe documents.
+  - In `ApplicantFollowUpWorkspace.tsx`, optimistic local row updates are retained across incoming prop updates, guaranteeing that saved Police Ashara values persist seamlessly without reverting.
+
+### 1.12 Kuwait Telesign Card Direct Editing & Manual Stage Finish Decoupling
+- **Problem**:
+  - Telesign card fields were locked/static until "Start Telesign" was clicked, and clicking "Finish stage" automatically injected a synthetic now timestamp for Date Completed.
+- **Frontend Fix**:
+  - Removed "Start Telesign" edit gating. All Telesign card fields (Telesign Reference Number, Telesign Status, Date Started, Date Completed, and Remarks) are now directly and interactively editable on the card.
+  - Telesign Status provides an editable `<select>` allowing users to transition between `Pending`, `In Progress`, and `Complete`, using authoritative RPCs (`startClearanceStepV2`, `completeClearanceStepV2`, `reopenClearanceStepV2`).
+  - Date Started and Date Completed are editable date inputs with instant local synchronization and backend persistence.
+  - The "Finish stage" modal now exposes Date Completed, Date Started, Ref No, and Remarks, allowing staff to review and adjust their actual data without synthetic date overwrites.
+
+### 1.13 Placement Parsed Fields Empty Payload Guard (Backend 417 "No editable field supplied")
+- **Problem**:
+  - When focusing and blurring empty eVisa fields or saving fields that evaluated to `undefined`, the Go backend endpoint `PATCH /v1/placements/{name}/parsed-fields` failed with HTTP 417:
+    `No editable field supplied. Allowed: visa number, visa type, visa_issue_date, visa_expiry_date, visa_reference_number, contract number, contract signed date, employer name, employer_national_id, employer address, saudi_agency_name, saudi_agency_license, kuwait_agency_name, kuwait_agency_license, employment site, contract duration, contract_salary_amount, contract_salary_currency, sponsor name, sponsor_civil_id, employer city, employer_house_number, employer phone, employer_alt_phone, contract_start_date, contract_end_date.`
+- **Backend Root Cause**:
+  - The Go backend handler parses the request JSON body and expects at least one valid, non-empty editable key from the whitelist. If the body is `{}` (e.g. because undefined keys were dropped during JSON serialization), the Go backend rejects the call with HTTP 417.
+- **Frontend Fix**:
+  - In `src/lib/api/v2/placements.ts`, `updatePlacementParsedFieldsV2` now inspects the supplied payload. If no valid field keys are provided, it returns early cleanly without dispatching an empty PATCH request.
+  - In `ApplicantFollowUpWorkspace.tsx`, `handleSaveKuwaitEvisaField`, `handleSaveEmbassyVisaNumber`, `handleSaveEmbassyVisaIssueDate`, and `handleSaveEmbassyVisaExpiryDate` verify `val === currentVal` and `!val && !currentVal` before dispatching updates.
+
 ---
 
 ## 2. Conformance Verification Checklist
