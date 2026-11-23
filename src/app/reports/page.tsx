@@ -785,11 +785,11 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-4 flex flex-col h-full min-h-0">
+    <div className="space-y-4 flex flex-col min-h-full">
       {/* ------------------------------------------------------------- */}
       {/* Top Header & Export Controls                                  */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between shrink-0">
         <div className="space-y-1">
           <Link
             href="/dashboard"
@@ -905,13 +905,13 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {/* Primary Report Navigation Tabs                                */}
       {/* ------------------------------------------------------------- */}
-      <div data-tour="reports-tabs" className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
+      <div data-tour="reports-tabs" className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto shrink-0">
         {(isManagerOrAdmin || isAdminOrFinance) && (
           <button
             type="button"
             onClick={() => setActiveTab("workers_by_year")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "workers_by_year"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
@@ -932,7 +932,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setActiveTab("operations")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "operations"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
@@ -948,7 +948,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setActiveTab("daily_work")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "daily_work"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
@@ -964,7 +964,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setActiveTab("aging")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "aging"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
@@ -985,7 +985,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setActiveTab("financial")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "financial"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
@@ -1001,7 +1001,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => setActiveTab("transactions")}
             className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0",
               activeTab === "transactions"
                 ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
                 : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
