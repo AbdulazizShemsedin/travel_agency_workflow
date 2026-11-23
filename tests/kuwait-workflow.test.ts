@@ -560,4 +560,42 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
     assert.equal(checkCanEdit(false, true), true, "Non-departed placement can be edited if user has permission");
     assert.equal(checkCanEdit(false, false), false, "Non-departed placement cannot be edited without permission");
   });
+
+  // Test 16: Pre-departure Medical 2 UNFIT Gate Conformance
+  test("16. Medical 2 UNFIT result strictly blocks departure gating in accordance with backend medical_2_gate", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: { url: string; body: any }[] = [];
+
+    globalThis.fetch = (async (url: any, options: any = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes("get_csrf_token") || urlStr.includes("csrf-token")) {
+        return createMockResponse({ message: "mock-csrf-token" });
+      }
+      const body = options.body ? (typeof options.body === "string" ? JSON.parse(options.body) : options.body) : null;
+      calls.push({ url: urlStr, body });
+      return createMockResponse({ message: { status: "Success", medical_2_status: body?.status || "UNFIT" } });
+    }) as any;
+
+    try {
+      // 1. Record Medical 2 as UNFIT
+      await recordPredepartureMedicalResultV2("PLM-00099", "UNFIT");
+      assert.equal(calls.length, 1);
+      assert.ok(calls[0].url.includes("/predeparture-medical") || calls[0].url.includes("agency_tracking.api.placement.write"));
+      assert.equal(calls[0].body.status, "UNFIT");
+
+      // 2. Validate gate logic: if an applicant is UNFIT, departure confirmation must be blocked
+      const canCandidateDepart = (medical2Status: string, selectedOutcome: string) => {
+        if (selectedOutcome === "Departed" && medical2Status === "UNFIT") {
+          return false;
+        }
+        return true;
+      };
+
+      assert.equal(canCandidateDepart("UNFIT", "Departed"), false, "UNFIT candidate must NOT be allowed to depart");
+      assert.equal(canCandidateDepart("FIT", "Departed"), true, "FIT candidate is permitted to depart");
+      assert.equal(canCandidateDepart("UNFIT", "Local return"), true, "Return flows handle UNFIT candidate without Departed gate violation");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

@@ -2340,20 +2340,6 @@ export default function PlacementDocumentCenterPage() {
                         />
                       </div>
 
-                      {/* Kuwait Agency Name */}
-                      <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">
-                        <span className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400 block leading-tight">Kuwait Partner Agency</span>
-                        <Input
-                          type="text"
-                          placeholder="Kuwait Agency Name"
-                          value={visaFields.kuwait_agency_name}
-                          onChange={(e) => {
-                            setVisaFields((p) => ({ ...p, kuwait_agency_name: e.target.value }));
-                            setIsVisaDirty(true);
-                          }}
-                          className="h-6.5 text-xs font-semibold px-1.5 py-0 bg-white dark:bg-[#121217] border-slate-200 dark:border-[#2a2a35] focus:ring-1 focus:ring-emerald-500 rounded"
-                        />
-                      </div>
 
                       {/* Kuwait Agency License */}
                       <div className="p-1 px-1.5 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#22222a] space-y-0.5">

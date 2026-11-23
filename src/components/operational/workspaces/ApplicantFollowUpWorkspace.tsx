@@ -1034,6 +1034,65 @@ export function ApplicantFollowUpWorkspace({
     }
   };
 
+  const handleSavePoliceAsharaInline = async (
+    field: "status" | "date" | "remark",
+    value: string
+  ) => {
+    if (!lmsStepName) {
+      toast.error("Kuwait LMIS clearance step record not found.");
+      return;
+    }
+    const targetStatus = field === "status" ? value : (policeAsharaStatus || currentRow?.policeAsharaStatus || "Pending");
+    const targetDate = field === "date" ? value : (policeAsharaApptDate || currentRow?.policeAsharaAppointmentDate || "");
+    const targetRemark = field === "remark" ? value : (policeAsharaRemark || currentRow?.policeAsharaRemark || "");
+
+    if (targetStatus === "Failed" && !targetRemark.trim()) {
+      toast.error("A remark is required when Police Ashara status is Failed.");
+      return;
+    }
+
+    const fieldKey = field === "status" ? "policeAsharaStatus" : field === "date" ? "policeAsharaApptDate" : "policeAsharaRemark";
+
+    try {
+      setSavingField((prev) => ({ ...prev, [fieldKey]: true }));
+      const res = await recordPoliceAsharaV2(lmsStepName, {
+        police_ashara_status: targetStatus,
+        police_ashara_appointment_date: targetDate || undefined,
+        police_ashara_remark: targetRemark.trim() || undefined,
+      });
+      const updatedStep = res?.message || res;
+      const finalStatus = updatedStep?.police_ashara_status || targetStatus;
+      const finalDate = updatedStep?.police_ashara_appointment_date || targetDate || undefined;
+      const finalRemark = updatedStep?.police_ashara_remark || targetRemark.trim() || undefined;
+
+      setSavedField((prev) => ({ ...prev, [fieldKey]: true }));
+      setTimeout(() => setSavedField((prev) => ({ ...prev, [fieldKey]: false })), 2000);
+
+      if (field === "status") setPoliceAsharaStatus(finalStatus);
+      if (field === "date") setPoliceAsharaApptDate(finalDate || "");
+      if (field === "remark") setPoliceAsharaRemark(finalRemark || "");
+
+      setCurrentRow((prev) => prev ? {
+        ...prev,
+        policeAsharaStatus: finalStatus,
+        policeAsharaAppointmentDate: finalDate,
+        policeAsharaRemark: finalRemark,
+        lms: prev.lms ? {
+          ...prev.lms,
+          ...updatedStep,
+          police_ashara_status: finalStatus,
+          police_ashara_appointment_date: finalDate,
+          police_ashara_remark: finalRemark,
+        } : prev.lms,
+      } : null);
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, [fieldKey]: false }));
+    }
+  };
+
   const handleSavePoliceAshara = async () => {
     if (!lmsStepName) {
       toast.error("Kuwait LMIS clearance step record not found.");
@@ -1892,71 +1951,155 @@ export function ApplicantFollowUpWorkspace({
                                 </div>
                               </div>
                             </div>
-                            <Link
-                              href={`/applicants/${currentRow.applicantId}/contractor-doc`}
-                              className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
-                            >
-                              <span>Placement Doc Center</span>
-                              <ChevronRight className="h-3 w-3" />
-                            </Link>
                           </div>
 
-                          {/* Police Ashara Sub-check */}
-                          <div className="col-span-2 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300">
-                                Kuwait Police Ashara Sub-check
-                              </span>
-                              {canEditLmis && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const lmsSource = (currentRow.lms || resolvedLmsStep || {}) as any;
-                                    setPoliceAsharaStatus(lmsSource.police_ashara_status || currentRow.policeAsharaStatus || "Pending");
-                                    setPoliceAsharaApptDate(lmsSource.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate || "");
-                                    setPoliceAsharaRemark(lmsSource.police_ashara_remark || currentRow.policeAsharaRemark || "");
-                                    setIsPoliceAsharaOpen(true);
-                                  }}
-                                  className="h-5 text-[10px] px-2 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950 font-semibold cursor-pointer"
-                                >
-                                  Manage Police Ashara
-                                </Button>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-slate-400 block text-[9px]">Appt Date:</span>
-                                <span className="font-mono font-semibold text-[11px]">{currentRow.lms?.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate || "—"}</span>
+                            {/* Police Ashara Sub-check (Directly Editable Inline) */}
+                            <div className="col-span-2 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300">
+                                  Kuwait Police Ashara Sub-check
+                                </span>
+                                {!canEditLmis && <Lock className="h-3 w-3 text-slate-400" />}
                               </div>
-                              <div>
-                                <span className="text-slate-400 block text-[9px]">Status:</span>
-                                <div>
-                                  <Badge
-                                    variant={
-                                      (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Completed"
-                                        ? "success"
-                                        : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Failed"
-                                        ? "destructive"
-                                        : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Scheduled"
-                                        ? "info"
-                                        : "warning"
-                                    }
-                                    className="text-[10px] font-bold py-0 h-4.5"
-                                  >
-                                    {currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus || "Pending"}
-                                  </Badge>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {/* Status */}
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-semibold text-amber-900 dark:text-amber-300">
+                                      Status
+                                    </Label>
+                                    {savingField.policeAsharaStatus && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                      </span>
+                                    )}
+                                    {savedField.policeAsharaStatus && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                        <Check className="h-3 w-3" /> Saved
+                                      </span>
+                                    )}
+                                  </div>
+                                  {canEditLmis ? (
+                                    <select
+                                      value={policeAsharaStatus || currentRow.policeAsharaStatus || "Pending"}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPoliceAsharaStatus(val);
+                                        handleSavePoliceAsharaInline("status", val);
+                                      }}
+                                      disabled={savingField.policeAsharaStatus}
+                                      className={cn(
+                                        "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer bg-white dark:bg-[#16161d]",
+                                        (policeAsharaStatus || currentRow.policeAsharaStatus) === "Completed"
+                                          ? "text-emerald-800 dark:text-emerald-300 border-emerald-500"
+                                          : (policeAsharaStatus || currentRow.policeAsharaStatus) === "Failed"
+                                          ? "text-rose-800 dark:text-rose-300 border-rose-500"
+                                          : (policeAsharaStatus || currentRow.policeAsharaStatus) === "Scheduled"
+                                          ? "text-blue-800 dark:text-blue-300 border-blue-500"
+                                          : "text-amber-800 dark:text-amber-300 border-amber-500"
+                                      )}
+                                    >
+                                      <option value="Pending">Pending</option>
+                                      <option value="Scheduled">Scheduled</option>
+                                      <option value="Completed">Completed</option>
+                                      <option value="Failed">Failed</option>
+                                    </select>
+                                  ) : (
+                                    <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-[#16161d] flex items-center">
+                                      <Badge
+                                        variant={
+                                          (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Completed"
+                                            ? "success"
+                                            : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Failed"
+                                            ? "destructive"
+                                            : (currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus) === "Scheduled"
+                                            ? "info"
+                                            : "warning"
+                                        }
+                                        className="text-[10px] font-bold py-0 h-4.5"
+                                      >
+                                        {currentRow.lms?.police_ashara_status || currentRow.policeAsharaStatus || "Pending"}
+                                      </Badge>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Appointment Date */}
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-semibold text-amber-900 dark:text-amber-300">
+                                      Appointment Date
+                                    </Label>
+                                    {savingField.policeAsharaApptDate && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                      </span>
+                                    )}
+                                    {savedField.policeAsharaApptDate && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                        <Check className="h-3 w-3" /> Saved
+                                      </span>
+                                    )}
+                                  </div>
+                                  {canEditLmis ? (
+                                    <Input
+                                      type="date"
+                                      value={policeAsharaApptDate || ""}
+                                      onChange={(e) => setPoliceAsharaApptDate(e.target.value)}
+                                      onBlur={(e) => handleSavePoliceAsharaInline("date", e.target.value)}
+                                      disabled={savingField.policeAsharaApptDate}
+                                      className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium bg-white dark:bg-[#16161d]"
+                                    />
+                                  ) : (
+                                    <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-[#16161d] flex items-center font-mono text-xs">
+                                      {currentRow.lms?.police_ashara_appointment_date || currentRow.policeAsharaAppointmentDate || "—"}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Remark */}
+                                <div className="sm:col-span-2 space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-semibold text-amber-900 dark:text-amber-300">
+                                      Remark {policeAsharaStatus === "Failed" && <span className="text-rose-600 font-bold">*</span>}
+                                    </Label>
+                                    {savingField.policeAsharaRemark && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                                      </span>
+                                    )}
+                                    {savedField.policeAsharaRemark && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                        <Check className="h-3 w-3" /> Saved
+                                      </span>
+                                    )}
+                                  </div>
+                                  {canEditLmis ? (
+                                    <Input
+                                      type="text"
+                                      value={policeAsharaRemark || ""}
+                                      onChange={(e) => setPoliceAsharaRemark(e.target.value)}
+                                      onBlur={(e) => handleSavePoliceAsharaInline("remark", e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          (e.target as HTMLInputElement).blur();
+                                        }
+                                      }}
+                                      disabled={savingField.policeAsharaRemark}
+                                      placeholder={policeAsharaStatus === "Failed" ? "Reason for failure is required..." : "Police station or biometric remarks..."}
+                                      className={cn(
+                                        "h-7 sm:h-7.5 px-2 text-xs bg-white dark:bg-[#16161d]",
+                                        policeAsharaStatus === "Failed" && !policeAsharaRemark.trim() && "border-rose-400"
+                                      )}
+                                    />
+                                  ) : (
+                                    <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-[#16161d] flex items-center text-xs italic text-slate-600 dark:text-zinc-400">
+                                      {currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark || "—"}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              {(currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark) && (
-                                <div className="col-span-2">
-                                  <span className="text-slate-400 block text-[9px]">Remark:</span>
-                                  <span className="text-slate-600 dark:text-zinc-400 text-[10px] italic">{currentRow.lms?.police_ashara_remark || currentRow.policeAsharaRemark}</span>
-                                </div>
-                              )}
                             </div>
-                          </div>
                         </>
                       )}
                     </div>
@@ -3429,13 +3572,6 @@ export function ApplicantFollowUpWorkspace({
                                 </div>
                               </div>
                             </div>
-                            <Link
-                              href={`/applicants/${currentRow.applicantId}/contractor-doc`}
-                              className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1"
-                            >
-                              <span>Placement Doc Center</span>
-                              <ChevronRight className="h-3 w-3" />
-                            </Link>
                           </div>
                         </>
                       )}
@@ -3837,7 +3973,11 @@ export function ApplicantFollowUpWorkspace({
                               if (val !== "FIT" && val !== "UNFIT") return;
                               try {
                                 await recordPredepartureMedicalResultV2(placementName, val);
-                                toast.success(val === "FIT" ? "Medical 2 set to FIT" : "Medical 2 set to UNFIT (Held)");
+                                if (val === "UNFIT") {
+                                  toast.error("Applicant Medical 2 result recorded as UNFIT. Candidate cannot be departed.");
+                                } else {
+                                  toast.success("Medical 2 set to FIT");
+                                }
                                 setCurrentRow((prev) => (prev ? { ...prev, medical2Status: val } : null));
                                 refreshAll();
                               } catch (err) {
@@ -3871,6 +4011,12 @@ export function ApplicantFollowUpWorkspace({
                             {(!canEditMedical || isTicketLocked || isPlacementDeparted) && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
+                        {currentRow.medical2Status === "UNFIT" && (
+                          <p className="mt-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            <span>Candidate is UNFIT: Departure is blocked.</span>
+                          </p>
+                        )}
                       </div>
 
                       {/* Field 5: Departure Status */}
@@ -3885,6 +4031,10 @@ export function ApplicantFollowUpWorkspace({
                             onChange={(e) => {
                               if (isTicketLocked) return;
                               const val = e.target.value;
+                              if (val === "Departed" && currentRow.medical2Status === "UNFIT") {
+                                toast.error("Candidate cannot be departed because Medical 2 result is UNFIT.");
+                                return;
+                              }
                               setCurrentRow((prev) => (prev ? { ...prev, departureStatus: val } : null));
                               if (val === "Departed" || val === "Local return" || val === "International return") {
                                 setSelectedFlightOutcome(val as any);
@@ -3899,7 +4049,9 @@ export function ApplicantFollowUpWorkspace({
                             )}
                           >
                             <option value="Pending">Pending</option>
-                            <option value="Departed">Departed</option>
+                            <option value="Departed" disabled={currentRow.medical2Status === "UNFIT"}>
+                              Departed{currentRow.medical2Status === "UNFIT" ? " (Blocked - Medical 2 UNFIT)" : ""}
+                            </option>
                             <option value="Local return">Local return</option>
                             <option value="International return">International return</option>
                           </select>
@@ -3988,6 +4140,10 @@ export function ApplicantFollowUpWorkspace({
                         <Button
                           size="sm"
                           onClick={() => {
+                            if (currentRow.medical2Status === "UNFIT") {
+                              toast.error("Candidate cannot be departed because Medical 2 result is UNFIT.");
+                              return;
+                            }
                             setSelectedFlightOutcome(
                               currentRow.departureStatus === "Local return" || currentRow.departureStatus === "International return"
                                 ? currentRow.departureStatus
@@ -3996,13 +4152,15 @@ export function ApplicantFollowUpWorkspace({
                             setDepartureRemark("");
                             setIsConfirmDepartOpen(true);
                           }}
-                          disabled={isTicketLocked || isDepartureConfirmedFinished || isFinishingDepart}
+                          disabled={isTicketLocked || isDepartureConfirmedFinished || isFinishingDepart || currentRow.medical2Status === "UNFIT"}
                           className={cn(
                             "h-6.5 sm:h-7 px-2.5 text-xs font-semibold shadow-sm bg-emerald-700 hover:bg-emerald-800 text-white",
-                            (isTicketLocked || isDepartureConfirmedFinished) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                            (isTicketLocked || isDepartureConfirmedFinished || currentRow.medical2Status === "UNFIT") ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
                           )}
                           title={
-                            isTicketLocked
+                            currentRow.medical2Status === "UNFIT"
+                              ? "Departure blocked: Medical 2 result is UNFIT"
+                              : isTicketLocked
                               ? "Stage locked until Embassy is Stamped"
                               : isDepartureConfirmedFinished
                               ? "Departure stage already finished"
@@ -4613,82 +4771,6 @@ export function ApplicantFollowUpWorkspace({
         </DialogContent>
       </Dialog>
 
-      {/* 1c. Manage Kuwait LMIS Police Ashara Dialog */}
-      <Dialog open={isPoliceAsharaOpen} onOpenChange={setIsPoliceAsharaOpen}>
-        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" />
-              Manage Kuwait Police Ashara
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Record official Police Ashara sub-check details for Kuwait LMIS candidate{" "}
-              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-xs">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Police Ashara Status *</Label>
-              <select
-                value={policeAsharaStatus}
-                onChange={(e) => setPoliceAsharaStatus(e.target.value)}
-                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-bold"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Scheduled">Scheduled</option>
-                <option value="Completed">Completed</option>
-                <option value="Failed">Failed</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Appointment Date</Label>
-              <Input
-                type="date"
-                value={policeAsharaApptDate}
-                onChange={(e) => setPoliceAsharaApptDate(e.target.value)}
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">
-                  Police Ashara Remark {policeAsharaStatus === "Failed" && <span className="text-rose-600 font-bold">*</span>}
-                </Label>
-                {policeAsharaStatus === "Failed" && (
-                  <span className="text-[10px] text-rose-600 font-medium">Required for Failed status</span>
-                )}
-              </div>
-              <Input
-                type="text"
-                value={policeAsharaRemark}
-                onChange={(e) => setPoliceAsharaRemark(e.target.value)}
-                placeholder={policeAsharaStatus === "Failed" ? "Reason for failure is required..." : "Police station or biometric remarks..."}
-                className={cn("h-8 text-xs", policeAsharaStatus === "Failed" && !policeAsharaRemark.trim() && "border-rose-400 focus-visible:ring-rose-400")}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setIsPoliceAsharaOpen(false)} className="text-xs h-8">
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={isSavingPoliceAshara}
-              onClick={handleSavePoliceAshara}
-              className="text-xs h-8 bg-amber-700 hover:bg-amber-800 text-white font-semibold cursor-pointer"
-            >
-              {isSavingPoliceAshara ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                  Saving...
-                </>
-              ) : (
-                "Save Police Ashara"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* 1d. Edit Placement LMIS Details Dialog (Kuwait) */}
       <Dialog open={isPlacementLmisOpen} onOpenChange={setIsPlacementLmisOpen}>
@@ -5251,6 +5333,12 @@ export function ApplicantFollowUpWorkspace({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
+            {currentRow.medical2Status === "UNFIT" && (
+              <div className="p-2.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                <span>Departure blocked: Candidate Medical 2 result is UNFIT. Workflow rules prevent departure of an UNFIT candidate.</span>
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Departure Outcome *</Label>
               <select
@@ -5259,8 +5347,12 @@ export function ApplicantFollowUpWorkspace({
                 className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-bold"
               >
                 {DEPARTURE_OUTCOMES.map((out) => (
-                  <option key={out} value={out}>
-                    {out}
+                  <option
+                    key={out}
+                    value={out}
+                    disabled={out === "Departed" && currentRow.medical2Status === "UNFIT"}
+                  >
+                    {out}{out === "Departed" && currentRow.medical2Status === "UNFIT" ? " (Blocked - Medical 2 UNFIT)" : ""}
                   </option>
                 ))}
               </select>
@@ -5272,10 +5364,14 @@ export function ApplicantFollowUpWorkspace({
             </Button>
             <Button
               size="sm"
-              disabled={isFinishingDepart}
+              disabled={isFinishingDepart || (selectedFlightOutcome === "Departed" && currentRow.medical2Status === "UNFIT")}
               onClick={async () => {
                 if (!placementName) {
                   toast.error("Candidate placement record not found.");
+                  return;
+                }
+                if (selectedFlightOutcome === "Departed" && currentRow.medical2Status === "UNFIT") {
+                  toast.error("Cannot depart candidate: Medical 2 result is UNFIT.");
                   return;
                 }
                 try {
@@ -5327,7 +5423,7 @@ export function ApplicantFollowUpWorkspace({
                           stageStatus: selectedFlightOutcome === "Departed" ? "Departed" : prev.stageStatus,
                           placementStatus: selectedFlightOutcome,
                           departureStatus: selectedFlightOutcome,
-                          medical2Status: "FIT",
+                          medical2Status: selectedFlightOutcome === "Departed" ? "FIT" : prev.medical2Status,
                           plc: prev.plc ? { ...prev.plc, status: selectedFlightOutcome } : prev.plc,
                         }
                       : null

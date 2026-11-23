@@ -38,7 +38,7 @@ All frontend components, workspaces, column renderers, and detail views have bee
   - Normalization logic handles both `"Complete"` and `"Completed"` gracefully in `ExcelSelect` and `FollowUpWorkspace` to prevent defaulting to `"Pending"`.
   - Finishing Telesign invokes `completeClearanceStepV2(injazStepName)` with an optional reference number passed as a remark.
 
-### 1.3 Police Ashara Sub-check & Financial Decoupling
+### 1.3 Police Ashara Sub-check & Direct Inline Editing
 - **Status**: Conforming to `clearance_api.record_police_ashara`.
 - **Backend Limitation**: The backend contract exposes:
   - `police_ashara_status`: `"Pending" | "Scheduled" | "Completed" | "Failed"`
@@ -46,9 +46,10 @@ All frontend components, workspaces, column renderers, and detail views have bee
   - `police_ashara_remark`: String (mandatory if `status === "Failed"`)
 - **Architectural Policy**: In alignment with the clearance fee hiding architecture (`TODO-OPERATIONAL-CONFORMANCE-01` and `MASTER_SYSTEM_STATUS.md`), manual fee collection inputs (`police_ashara_amount`, `police_ashara_payment_status`) are hidden from standard operational workspaces. Fees are automatically recorded by the corridor engine or managed in the Finance workspace.
 - **Frontend Handling**:
-  - The Follow-up dialog exposes `police_ashara_status`, `police_ashara_appointment_date`, and `police_ashara_remark`.
+  - The Kuwait LMIS card provides direct, inline-editable inputs for `Status` (dropdown), `Appointment Date` (date picker), and `Remark` (text input).
+  - Modal popups for Police Ashara have been removed in favor of direct in-card editing matching the rest of the workspace cards.
   - If status is `Failed`, `police_ashara_remark` is strictly enforced before submission.
-  - The input for `Amount (ETB / Fee)` has been removed from the Follow-up dialog.
+  - The input for `Amount (ETB / Fee)` has been removed from the Follow-up workspace.
 
 ### 1.4 Kuwait Placement Contract and eVisa Persistence
 - **Status**: Fully integrated via Native File-ID API (`/v1/files`).
@@ -60,6 +61,21 @@ All frontend components, workspaces, column renderers, and detail views have bee
 - **Frontend Handling**:
   - Operational workspaces correctly read these fields from `currentRow.plc` and placement records.
   - Saudi Musaned contract numbers are not required for Kuwait candidates (`hasContract` resolves via `contract_file` and `employment_site`).
+  - Redundant navigation links ("Placement Doc Center") on the bilateral paper contract and Kuwait eVisa cards have been removed to preserve focused in-page follow-up workflow.
+  - In the Placement Document Center (`/applicants/[id]/contractor-doc`), the "Kuwait Partner Agency" input has been removed from the Kuwait eVisa section because the contractor agency is already established during candidate selection.
+
+### 1.5 Pre-departure Medical 2 UNFIT Gate on Departure
+- **Status**: Enforced strictly via backend state machine rule `state_machine.medical_2_gate`.
+- **Backend Architecture**:
+  - `advance_placement(new_status="Departed")` is strictly gated on `medical_2_status == "FIT"`.
+  - Recording `medical_2_status == "UNFIT"` cancels the placement progression and holds the candidate.
+- **Frontend Handling**:
+  - Selecting `UNFIT` in the Medical 2 Result dropdown immediately records the UNFIT result via `record_predeparture_medical_result` and alerts the user: *"Applicant Medical 2 result recorded as UNFIT. Candidate cannot be departed."*
+  - An inline danger badge (*"Candidate is UNFIT: Departure is blocked."*) is displayed directly below the Medical 2 Result field.
+  - The Departure Status dropdown blocks choosing *"Departed"* if the candidate is UNFIT.
+  - The departure "Finish stage" button is disabled with tooltip *"Departure blocked: Medical 2 result is UNFIT"*.
+  - The Confirm Departure dialog displays an alert banner warning that departure is blocked, disables the "Departed" outcome option, and prevents executing departure transitions while the candidate is UNFIT.
+  - Any automatic overriding of `medical_2_status` to `"FIT"` upon departure confirmation has been eliminated.
 
 ### 1.5 Strict Wakala and COC Exclusion for Kuwait
 - **Status**: Completely eliminated from JSX rendering (no `— N/A (Kuwait)` placeholders).
