@@ -32,7 +32,6 @@ import {
   ClipboardList,
   Workflow,
   Inbox,
-  ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -266,12 +265,6 @@ export default function DashboardPage() {
       href: "/complaints",
       icon: AlertCircle,
       desc: "Disputes & resolutions",
-    },
-    {
-      label: "My Tasks",
-      href: "/notifications?tab=tasks",
-      icon: ListTodo,
-      desc: "Pending clearance actions",
     },
     {
       label: "Foreign Agencies",

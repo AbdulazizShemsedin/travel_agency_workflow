@@ -76,6 +76,7 @@ export interface V2PastRecordDatesPayload {
   registered_on: string;
   cv_generated_on?: string;
   selected_on?: string;
+  processing_on?: string;
   processing_started_on?: string;
   stamped_on?: string;
   ticketed_on?: string;
@@ -202,11 +203,34 @@ export async function getPastRecordFormV2(): Promise<V2PastRecordFormConfig> {
 export async function createPastRecordV2(
   payload: V2PastRecordCreatePayload
 ): Promise<{ name?: string; message?: string; applicant?: string; placement?: string; [key: string]: any }> {
+  // Normalize dates dictionary to ensure backend contract conformance:
+  // 1. Remap legacy 'processing_started_on' to backend key 'processing_on'.
+  // 2. Strip empty string or undefined date fields so closed schema validator does not reject them.
+  const cleanDates: Record<string, string> = {};
+  if (payload.dates) {
+    for (const [k, v] of Object.entries(payload.dates)) {
+      if (v && typeof v === "string" && v.trim()) {
+        if (k === "processing_started_on") {
+          if (!payload.dates.processing_on && !cleanDates.processing_on) {
+            cleanDates["processing_on"] = v.trim();
+          }
+        } else {
+          cleanDates[k] = v.trim();
+        }
+      }
+    }
+  }
+
+  const cleanPayload: V2PastRecordCreatePayload = {
+    ...payload,
+    dates: cleanDates as V2PastRecordDatesPayload,
+  };
+
   return await requestV2(
     "/api/method/agency_tracking.api.past_record.write?op=create_past_record",
     {
       method: "POST",
-      body: payload,
+      body: cleanPayload,
     }
   );
 }

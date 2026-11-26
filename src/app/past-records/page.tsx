@@ -22,17 +22,20 @@ import {
   FileText,
   BadgeAlert,
   ArrowRight,
+  Search,
 } from "lucide-react";
 import {
   getPastRecordFormV2,
   createPastRecordV2,
   listPastRecordsV2,
   undoPastRecordV2,
+  listApplicantsV2,
   V2PastRecordFormConfig,
   V2PastRecordCreatePayload,
   V2PastRecordItem,
   V2PastRecordStepPayload,
   V2PastRecordFeePayload,
+  V2ApplicantDetails,
 } from "@/lib/api/v2";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isAdminUser } from "@/lib/auth/permissions";
@@ -114,6 +117,35 @@ export default function PastRecordsPage() {
     queryFn: () => listPastRecordsV2(),
     enabled: activeTab === "history",
   });
+
+  // Candidate Lookup / Link State
+  const [selectedApplicant, setSelectedApplicant] = React.useState<V2ApplicantDetails | null>(null);
+  const [applicantSearchQuery, setApplicantSearchQuery] = React.useState("");
+  const [showApplicantDropdown, setShowApplicantDropdown] = React.useState(false);
+
+  // Fetch Candidates for optional linking / auto-population
+  const {
+    data: applicantsList = [],
+    isLoading: isLoadingApplicants,
+  } = useQuery<V2ApplicantDetails[]>({
+    queryKey: ["v2_past_records_applicants_lookup"],
+    queryFn: () => listApplicantsV2(undefined, 100),
+    staleTime: 60 * 1000,
+  });
+
+  // Filtered applicants for autocomplete
+  const filteredApplicants = React.useMemo(() => {
+    if (!applicantSearchQuery.trim()) return applicantsList.slice(0, 15);
+    const q = applicantSearchQuery.toLowerCase().trim();
+    return applicantsList
+      .filter(
+        (a) =>
+          (a.full_name && a.full_name.toLowerCase().includes(q)) ||
+          (a.passport_number && a.passport_number.toLowerCase().includes(q)) ||
+          (a.name && a.name.toLowerCase().includes(q))
+      )
+      .slice(0, 20);
+  }, [applicantsList, applicantSearchQuery]);
 
   // Form State
   const [selectedStage, setSelectedStage] = React.useState<string>("Departed");
@@ -235,8 +267,69 @@ export default function PastRecordsPage() {
     }
   }, [formConfig, contractor]);
 
+  // Handle applicant selection / autofill
+  const handleSelectApplicant = (app: V2ApplicantDetails) => {
+    setSelectedApplicant(app);
+    setApplicantSearchQuery(app.full_name || app.name || "");
+    setShowApplicantDropdown(false);
+
+    // Populate worker identity details
+    setWorkerFullName((app.full_name || app.name || "").toUpperCase());
+    setWorkerPassportNumber((app.passport_number || "").toUpperCase().trim());
+    setWorkerGender(app.gender === "Male" ? "Male" : "Female");
+    setEntryTrack(app.entry_track === "Muayena" ? "Muayena" : "Standard");
+    if (app.destination_country) {
+      setDestCountry(app.destination_country);
+    }
+    setWorkerDob(app.date_of_birth || "");
+    setWorkerPob((app.place_of_birth || "").toUpperCase());
+    setWorkerPassportIssue(app.passport_issue_date || "");
+    setWorkerPassportExpiry(app.passport_expiry_date || "");
+    setWorkerPlaceOfIssue((app.place_of_issue || "").toUpperCase());
+    setWorkerNationalId(app.national_id || "");
+    setWorkerLabourId(app.labour_id || "");
+    setWorkerPhone(app.phone_number || app.phone || "");
+
+    // Stage awareness: detect workflow stage from candidate record
+    const rawStage = String(app.status || app.applicant_state || "").trim();
+    const stageName = ALL_STAGES.find((s) => s.toLowerCase() === rawStage.toLowerCase());
+    if (stageName) {
+      setSelectedStage(stageName);
+    } else if (rawStage.toLowerCase().includes("depart")) {
+      setSelectedStage("Departed");
+    } else if (rawStage.toLowerCase().includes("ticket")) {
+      setSelectedStage("Ticketed");
+    } else if (rawStage.toLowerCase().includes("stamp")) {
+      setSelectedStage("Stamped");
+    } else if (rawStage.toLowerCase().includes("process")) {
+      setSelectedStage("Processing");
+    } else if (rawStage.toLowerCase().includes("select")) {
+      setSelectedStage("Selected");
+    } else if (rawStage.toLowerCase().includes("cv")) {
+      setSelectedStage("CV Generated");
+    }
+
+    // Populate registration date from creation date if available
+    if (app.creation) {
+      const d = app.creation.split(" ")[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        setRegisteredOn(d);
+      }
+    }
+  };
+
+  const handleClearSelectedApplicant = () => {
+    setSelectedApplicant(null);
+    setApplicantSearchQuery("");
+    setShowApplicantDropdown(false);
+    handleResetForm();
+  };
+
   // Reset form
   const handleResetForm = () => {
+    setSelectedApplicant(null);
+    setApplicantSearchQuery("");
+    setShowApplicantDropdown(false);
     setWorkerFullName("");
     setWorkerPassportNumber("");
     setWorkerDob("");
@@ -288,6 +381,7 @@ export default function PastRecordsPage() {
     onError: (err: any) => {
       const msg = formatCleanErrorMessage(err);
       setFormValidationError(msg);
+      // NOTE: Form values are preserved on error so user work is never lost
     },
   });
 
@@ -311,6 +405,9 @@ export default function PastRecordsPage() {
   // Submission handler with atomic timeline validations
   const handleSubmitRecord = (e: React.FormEvent) => {
     e.preventDefault();
+    // Guard against double submission or concurrent clicks
+    if (createMutation.isPending) return;
+
     setFormValidationError(null);
     setSubmitSuccessMessage(null);
 
@@ -339,16 +436,22 @@ export default function PastRecordsPage() {
       setFormValidationError("Foreign Agency/Contractor is required from Selected stage onward.");
       return;
     }
+    if (selectedStage === "Departed" && hasCommission) {
+      if (commissionAmount === "" || isNaN(Number(commissionAmount)) || Number(commissionAmount) <= 0) {
+        setFormValidationError("Commission amount is required and must be greater than zero when recording commission.");
+        return;
+      }
+    }
 
     // Timeline Nondecreasing Check
     const datePairs: Array<{ name: string; val: string }> = [
       { name: "Registration", val: registeredOn },
-      { name: "CV Generated", val: cvGeneratedOn },
-      { name: "Selected", val: selectedOn },
-      { name: "Processing Started", val: processingStartedOn },
-      { name: "Stamped", val: stampedOn },
-      { name: "Ticketed", val: ticketedOn },
-      { name: "Departed", val: departedOn },
+      { name: "CV Generated", val: hasReached("CV Generated") ? cvGeneratedOn : "" },
+      { name: "Selected", val: hasReached("Selected") ? selectedOn : "" },
+      { name: "Clearance Processing", val: hasReached("Processing") ? processingStartedOn : "" },
+      { name: "Stamped", val: hasReached("Stamped") ? stampedOn : "" },
+      { name: "Ticketed", val: hasReached("Ticketed") ? ticketedOn : "" },
+      { name: "Departed", val: hasReached("Departed") ? departedOn : "" },
     ].filter((p) => p.val && p.val.trim());
 
     for (let i = 0; i < datePairs.length - 1; i++) {
@@ -358,6 +461,31 @@ export default function PastRecordsPage() {
         );
         return;
       }
+    }
+
+    // Construct stage-aware milestone dates payload using authoritative backend keys
+    const processingDateKey = formConfig?.stage_date_fields?.["Processing"] || "processing_on";
+
+    const cleanDates: Record<string, string> = {
+      registered_on: registeredOn,
+    };
+    if (hasReached("CV Generated") && cvGeneratedOn) {
+      cleanDates[formConfig?.stage_date_fields?.["CV Generated"] || "cv_generated_on"] = cvGeneratedOn;
+    }
+    if (hasReached("Selected") && selectedOn) {
+      cleanDates[formConfig?.stage_date_fields?.["Selected"] || "selected_on"] = selectedOn;
+    }
+    if (hasReached("Processing") && processingStartedOn) {
+      cleanDates[processingDateKey] = processingStartedOn;
+    }
+    if (hasReached("Stamped") && stampedOn) {
+      cleanDates[formConfig?.stage_date_fields?.["Stamped"] || "stamped_on"] = stampedOn;
+    }
+    if (hasReached("Ticketed") && ticketedOn) {
+      cleanDates[formConfig?.stage_date_fields?.["Ticketed"] || "ticketed_on"] = ticketedOn;
+    }
+    if (hasReached("Departed") && departedOn) {
+      cleanDates[formConfig?.stage_date_fields?.["Departed"] || "departed_on"] = departedOn;
     }
 
     const payload: V2PastRecordCreatePayload = {
@@ -378,35 +506,27 @@ export default function PastRecordsPage() {
         nationality: "Ethiopia",
       },
       stage: selectedStage,
-      dates: {
-        registered_on: registeredOn,
-        cv_generated_on: cvGeneratedOn || undefined,
-        selected_on: selectedOn || undefined,
-        processing_started_on: processingStartedOn || undefined,
-        stamped_on: stampedOn || undefined,
-        ticketed_on: ticketedOn || undefined,
-        departed_on: departedOn || undefined,
-      },
+      dates: cleanDates as any,
       ...(hasReached("Selected")
         ? {
             case: {
               contractor,
-              contract_number: contractNumber || undefined,
+              contract_number: contractNumber.trim() || undefined,
               contract_date: contractDate || undefined,
-              visa_number: visaNumber || undefined,
+              visa_number: visaNumber.trim() || undefined,
               visa_date: visaDate || undefined,
-              sponsor_name: sponsorName || undefined,
-              sponsor_id: sponsorId || undefined,
-              sponsor_phone: sponsorPhone || undefined,
-              ticket_number: ticketNumber || undefined,
-              flight_date: flightDate || undefined,
-              flight_time: flightTime || undefined,
-              airline: airline || undefined,
-              ticketing_remarks: ticketingRemarks || undefined,
+              sponsor_name: sponsorName.trim() || undefined,
+              sponsor_id: sponsorId.trim() || undefined,
+              sponsor_phone: sponsorPhone.trim() || undefined,
+              ticket_number: hasReached("Ticketed") ? ticketNumber.trim() || undefined : undefined,
+              flight_date: hasReached("Ticketed") ? flightDate || undefined : undefined,
+              flight_time: hasReached("Ticketed") ? flightTime || undefined : undefined,
+              airline: hasReached("Ticketed") ? airline.trim() || undefined : undefined,
+              ticketing_remarks: hasReached("Ticketed") ? ticketingRemarks.trim() || undefined : undefined,
               medical_result: medicalResult || undefined,
               medical_date: medicalDate || undefined,
-              medical_2_result: medical2Result || undefined,
-              medical_2_date: medical2Date || undefined,
+              medical_2_result: hasReached("Ticketed") ? medical2Result || undefined : undefined,
+              medical_2_date: hasReached("Ticketed") ? medical2Date || undefined : undefined,
             },
           }
         : {}),
@@ -417,19 +537,29 @@ export default function PastRecordsPage() {
               status: st.status || "Completed",
               date_started: st.date_started || undefined,
               date_completed: st.date_completed || undefined,
-              reference_no: st.reference_no || undefined,
-              remarks: st.remarks || undefined,
+              reference_no: st.reference_no?.trim() || undefined,
+              remarks: st.remarks?.trim() || undefined,
             })),
           }
         : {}),
-      ...(fees.length > 0 ? { fees } : {}),
+      ...(fees.length > 0
+        ? {
+            fees: fees.map((f) => ({
+              fee_type: f.fee_type,
+              amount: Number(f.amount) || 0,
+              currency: f.currency,
+              paid_on: f.paid_on || undefined,
+              description: f.description?.trim() || undefined,
+            })),
+          }
+        : {}),
       ...(selectedStage === "Departed" && hasCommission && commissionAmount !== ""
         ? {
             commission: {
               contractor,
               amount: Number(commissionAmount) || 0,
               currency: commissionCurrency,
-              notes: commissionNotes || undefined,
+              notes: commissionNotes?.trim() || undefined,
             },
           }
         : {}),
@@ -601,6 +731,82 @@ export default function PastRecordsPage() {
                 </CardContent>
               </Card>
 
+              {/* CANDIDATE AUTOFILL & LOOKUP (OPTIONAL) */}
+              <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-slate-50/60 dark:bg-zinc-900/60">
+                <CardHeader className="pb-2.5 border-b border-slate-100 dark:border-zinc-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-xs font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                        <User className="h-3.5 w-3.5 text-blue-600" />
+                        Autofill from Existing Candidate (Optional)
+                      </CardTitle>
+                      <CardDescription className="text-[11px] text-slate-500">
+                        Search and select a candidate in the system to auto-populate identity, country, processing track, and milestone stage. You may also enter historical workers manually.
+                      </CardDescription>
+                    </div>
+                    {selectedApplicant && (
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[11px] font-semibold">
+                          Linked: {selectedApplicant.full_name || selectedApplicant.name} ({selectedApplicant.status || "Candidate"})
+                        </Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearSelectedApplicant}
+                          className="h-6 text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 px-2"
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Clear Selection
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-3">
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Search candidate by full name, passport number, or APP ID..."
+                        value={applicantSearchQuery}
+                        onChange={(e) => {
+                          setApplicantSearchQuery(e.target.value);
+                          setShowApplicantDropdown(true);
+                        }}
+                        onFocus={() => setShowApplicantDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowApplicantDropdown(false), 200)}
+                        className="pl-8 h-8 text-xs bg-white dark:bg-zinc-900"
+                      />
+                    </div>
+                    {showApplicantDropdown && filteredApplicants.length > 0 && (
+                      <div className="absolute z-20 mt-1 w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg shadow-lg max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800">
+                        {filteredApplicants.map((app) => (
+                          <button
+                            key={app.name}
+                            type="button"
+                            onClick={() => handleSelectApplicant(app)}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-zinc-800 flex items-center justify-between transition-colors"
+                          >
+                            <div>
+                              <div className="font-semibold text-slate-900 dark:text-white">
+                                {app.full_name || app.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">
+                                {app.passport_number || "No Passport"} &bull; {app.destination_country || "No Country"} &bull; {app.entry_track || "Standard"}
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] font-medium">
+                              {app.status || "Registered"}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* SECTION 1: WORKER DETAILS */}
               <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
                 <CardHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800">
@@ -611,7 +817,9 @@ export default function PastRecordsPage() {
                 </CardHeader>
                 <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Full Name *</Label>
+                    <Label className="text-xs font-semibold">
+                      Full Name <span className="text-rose-500">*</span>
+                    </Label>
                     <Input
                       required
                       placeholder="e.g. ABEBECH KEBEDE DEMISSIE"
@@ -622,7 +830,9 @@ export default function PastRecordsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Passport Number *</Label>
+                    <Label className="text-xs font-semibold">
+                      Passport Number <span className="text-rose-500">*</span>
+                    </Label>
                     <Input
                       required
                       placeholder="e.g. EP1234567"
@@ -633,7 +843,9 @@ export default function PastRecordsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Gender *</Label>
+                    <Label className="text-xs font-semibold">
+                      Gender <span className="text-rose-500">*</span>
+                    </Label>
                     <select
                       value={workerGender}
                       onChange={(e) => setWorkerGender(e.target.value as any)}
@@ -645,7 +857,9 @@ export default function PastRecordsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Entry Track *</Label>
+                    <Label className="text-xs font-semibold">
+                      Entry Track <span className="text-rose-500">*</span>
+                    </Label>
                     <select
                       value={entryTrack}
                       onChange={(e) => setEntryTrack(e.target.value as any)}
@@ -657,7 +871,9 @@ export default function PastRecordsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold">Destination Country *</Label>
+                    <Label className="text-xs font-semibold">
+                      Destination Country <span className="text-rose-500">*</span>
+                    </Label>
                     <select
                       value={destCountry}
                       onChange={(e) => setDestCountry(e.target.value)}
@@ -765,7 +981,7 @@ export default function PastRecordsPage() {
                 <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                      Registration Date *
+                      Registration Date <span className="text-rose-500">*</span>
                     </Label>
                     <Input
                       type="date"
@@ -802,7 +1018,7 @@ export default function PastRecordsPage() {
 
                   {hasReached("Processing") && (
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold">Clearance Processing Started</Label>
+                      <Label className="text-xs font-semibold">Clearance Processing Date</Label>
                       <Input
                         type="date"
                         value={processingStartedOn}
@@ -839,7 +1055,7 @@ export default function PastRecordsPage() {
                   {hasReached("Departed") && (
                     <div className="space-y-1">
                       <Label className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                        Departure Date *
+                        Departure Date <span className="text-rose-500">*</span>
                       </Label>
                       <Input
                         type="date"
@@ -865,7 +1081,7 @@ export default function PastRecordsPage() {
                   <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <Label className="text-xs font-semibold text-amber-900 dark:text-amber-200">
-                        Foreign Agency / Contractor *
+                        Foreign Agency / Contractor <span className="text-rose-500">*</span>
                       </Label>
                       <select
                         required
@@ -1217,7 +1433,9 @@ export default function PastRecordsPage() {
                   {hasCommission && (
                     <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
-                        <Label className="text-xs font-semibold">Commission Amount</Label>
+                        <Label className="text-xs font-semibold">
+                          Commission Amount <span className="text-rose-500">*</span>
+                        </Label>
                         <Input
                           type="number"
                           placeholder="e.g. 5000"
@@ -1228,7 +1446,9 @@ export default function PastRecordsPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-xs font-semibold">Currency</Label>
+                        <Label className="text-xs font-semibold">
+                          Currency <span className="text-rose-500">*</span>
+                        </Label>
                         <select
                           value={commissionCurrency}
                           onChange={(e) => setCommissionCurrency(e.target.value)}
@@ -1476,7 +1696,9 @@ export default function PastRecordsPage() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Reason for Undo *</Label>
+              <Label className="text-xs font-semibold">
+                Reason for Undo <span className="text-rose-500">*</span>
+              </Label>
               <Textarea
                 required
                 rows={3}

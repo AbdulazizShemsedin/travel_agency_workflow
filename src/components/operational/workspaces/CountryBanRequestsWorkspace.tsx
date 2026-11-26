@@ -154,7 +154,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
         <div>
           <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            Country Ban Exception Queue (Ashara Teyezuwal)
+            Country Ban Requests & Exception Queue
           </h2>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
             Review, approve, or reject override passes and permanent ban lift requests filed by registrars and staff.
@@ -439,7 +439,10 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
           <div className="space-y-3 py-2 text-xs">
             <div className="p-3 bg-slate-50 dark:bg-[#1c1c24] rounded-lg border border-slate-200 dark:border-[#2a2a35] space-y-1">
               <div>
-                Applicant: <strong>{activeRequest?.applicant_name || activeRequest?.full_name || activeRequest?.applicant}</strong> ({activeRequest?.applicant})
+                Applicant: <strong>{activeRequest?.applicant_name || activeRequest?.full_name || "Candidate"}</strong>
+                {activeRequest?.passport_number && (
+                  <span className="font-mono text-slate-400 ml-1.5">({activeRequest.passport_number})</span>
+                )}
               </div>
               <div>Country: <strong>{activeRequest?.country}</strong> • Request: <strong>{activeRequest?.request_type}</strong></div>
               {activeRequest?.action && <div>Action: <strong>{activeRequest.action}</strong></div>}

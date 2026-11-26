@@ -1095,7 +1095,7 @@ export async function restartApplicantV2(
 }
 
 /**
- * Sets a permanent per-(Applicant, Country) ban ("Ashara Teyezuwal").
+ * Sets a permanent per-(Applicant, Country) ban.
  */
 export async function setCountryBanV2(
   applicantName: string,

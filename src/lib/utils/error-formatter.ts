@@ -136,6 +136,16 @@ const FIELD_NAME_MAP: Record<string, string> = {
   destination_airport: "destination airport",
   destination_city: "destination city",
 
+  // Milestone & Timeline Dates
+  registered_on: "registration date",
+  cv_generated_on: "CV generated date",
+  selected_on: "selection date",
+  processing_on: "clearance processing date",
+  processing_started_on: "clearance processing date",
+  stamped_on: "visa stamped date",
+  ticketed_on: "ticketed date",
+  departed_on: "departure date",
+
   // Financial Batches
   advance_amount: "advance amount",
   requested_advance_amount: "requested advance amount",
@@ -556,6 +566,20 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   if (/Document has been modified after you have opened it|TimestampMismatchError/i.test(text)) {
     return "This record or session was updated concurrently. Please refresh the page or try signing in again.";
   }
+  // 10b. Past Record & Milestone Date Exceptions
+  if (/Unknown dates?:\s*([a-z0-9_,\s]+)/i.test(text) || /unsupported date field/i.test(text)) {
+    return "We couldn't save this record because one of its date fields is not supported by the system. Please review your milestone dates or contact the administrator.";
+  }
+  if (/Missing required date/i.test(text)) {
+    return "Please provide the required date before submitting.";
+  }
+  if (/Invalid date format/i.test(text) || /Enter a valid date/i.test(text)) {
+    return "Please enter a valid date in YYYY-MM-DD format.";
+  }
+  if (/Historical timeline dates must be non-decreasing/i.test(text)) {
+    return text;
+  }
+
   if (/^(?:HTTP\s*417|status code 417)\.?$/i.test(text.trim())) {
     return "Please check the entered information and try again.";
   }
@@ -610,6 +634,9 @@ export function formatCleanErrorMessage(rawError: unknown): string {
       return `This ${friendlyField} ('${fieldValue}') is already used by applicant ${appName}. Please check the number.`;
     }
 
+    if (/past[_\s-]?record/i.test(text)) {
+      return "A past record for this applicant or passport number may already exist. Please check the existing records in the History tab.";
+    }
     if (/passport/i.test(text)) {
       return "An applicant with this passport number is already registered.";
     }

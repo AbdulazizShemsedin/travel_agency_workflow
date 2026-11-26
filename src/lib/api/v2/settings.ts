@@ -203,7 +203,10 @@ export interface V2CorridorConfig {
 export async function listCorridorsV2(): Promise<V2CorridorConfig[]> {
   const result = await requestV2<V2CorridorConfig[] | { message: V2CorridorConfig[] }>(
     "/api/method/agency_tracking.api.system.read?op=list_corridors",
-    { method: "POST" }
+    {
+      method: "POST",
+      body: { op: "list_corridors" },
+    }
   );
   if (Array.isArray(result)) return result;
   if (result && Array.isArray((result as any).message)) return (result as any).message;
@@ -219,6 +222,7 @@ export async function updateCorridorFeesV2(
     {
       method: "POST",
       body: {
+        op: "update_corridor_fees",
         destination_country,
         fees,
       },

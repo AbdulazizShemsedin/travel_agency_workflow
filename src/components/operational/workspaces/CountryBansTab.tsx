@@ -291,7 +291,7 @@ export function CountryBansTab({ isManagerOrAdmin, onRefresh }: CountryBansTabPr
                           className="h-7 text-xs border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold gap-1"
                         >
                           <RotateCcw className="h-3 w-3" />
-                          <span>Put back</span>
+                          <span>Undo Lift</span>
                         </Button>
                       ) : (
                         <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50 text-[10px]">
@@ -381,7 +381,7 @@ export function CountryBansTab({ isManagerOrAdmin, onRefresh }: CountryBansTabPr
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-amber-600" />
-              Put Back Ban (Restore Active Restriction)
+              Undo Ban Lift (Restore Country Restriction)
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
               Re-activate ban for{" "}

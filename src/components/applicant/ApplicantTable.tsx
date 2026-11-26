@@ -30,7 +30,18 @@ import {
   AlertCircle,
   AlertTriangle,
   Download,
+  ShieldAlert,
 } from "lucide-react";
+import {
+  SetCountryBanModal,
+  ManageCountryBanModal,
+  BanApplicantTarget,
+} from "./CountryBanModals";
+import {
+  listCountryBansV2,
+  V2CountryBanRecord,
+} from "@/lib/api/v2/applicants";
+import { isPureForeignAgency } from "@/lib/auth/permissions";
 import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
 import {
   cancelApplicantV2,
@@ -266,6 +277,61 @@ export function ApplicantTable() {
     const isContractParser = roleNames.includes("contract parser") && !isRoleReadOnly(authUser as any, "Contract Parser");
     return isRegistrar || isContractParser;
   }, [authUser]);
+
+  // ── Country Ban Permissions & Active Bans ──────────────────────────────────
+  const isAgency = React.useMemo(() => isPureForeignAgency(authUser), [authUser]);
+
+  const isManagerOrAdmin = React.useMemo<boolean>(() => {
+    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
+    if (emailOrName === "administrator") return true;
+    if (can("manageUsers")) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = String(r).trim().toLowerCase();
+      return (
+        norm === "system manager" ||
+        norm === "administrator" ||
+        norm === "manager" ||
+        norm === "agency admin" ||
+        norm === "admin"
+      );
+    });
+  }, [authUser, roles, can]);
+
+  const canSetBan = React.useMemo<boolean>(() => {
+    if (isAgency) return false;
+    if (isManagerOrAdmin) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = String(r).trim().toLowerCase();
+      return norm === "registrar" || norm === "complaint manager" || norm === "complaints manager";
+    });
+  }, [isAgency, isManagerOrAdmin, roles]);
+
+  const { data: activeBans = [], refetch: refetchActiveBans } = useQuery<V2CountryBanRecord[]>({
+    queryKey: ["v2_active_country_bans"],
+    queryFn: () => listCountryBansV2(undefined, 1),
+    enabled: !isAgency,
+    staleTime: 30000,
+  });
+
+  const activeBansMap = React.useMemo(() => {
+    const map = new Map<string, V2CountryBanRecord>();
+    for (const ban of activeBans) {
+      if (ban.applicant && (ban.active === 1 || ban.active === undefined)) {
+        map.set(ban.applicant.toLowerCase().trim(), ban);
+      }
+    }
+    return map;
+  }, [activeBans]);
+
+  // Country Ban Modal States
+  const [isSetBanModalOpen, setIsSetBanModalOpen] = React.useState(false);
+  const [setBanTargetApplicant, setSetBanTargetApplicant] = React.useState<BanApplicantTarget | null>(null);
+
+  const [isManageBanModalOpen, setIsManageBanModalOpen] = React.useState(false);
+  const [manageBanTargetApplicant, setManageBanTargetApplicant] = React.useState<BanApplicantTarget | null>(null);
+  const [manageBanActiveRecord, setManageBanActiveRecord] = React.useState<V2CountryBanRecord | null>(null);
 
   // Sync stage filter if URL parameter changes
   React.useEffect(() => {
@@ -1239,6 +1305,10 @@ export function ApplicantTable() {
                       ? "text-blue-600 dark:text-blue-400 font-semibold"
                       : "text-slate-400";
 
+                  // Country Ban resolution
+                  const activeBan = !isAgency ? activeBansMap.get(applicant.name.toLowerCase().trim()) : null;
+                  const isBanned = Boolean(activeBan);
+
                   return (
                     <tr
                       key={applicant.name}
@@ -1290,6 +1360,15 @@ export function ApplicantTable() {
                               Boolean((applicant as any).is_muayena)) && (
                               <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
                                 M
+                              </span>
+                            )}
+                            {!isAgency && isBanned && (
+                              <span
+                                className="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-300 dark:border-rose-800 shrink-0 flex items-center gap-0.5"
+                                title={`Active Country Ban for ${activeBan?.country || "restricted destination"}`}
+                              >
+                                <ShieldAlert className="h-2.5 w-2.5 text-rose-600" />
+                                Banned
                               </span>
                             )}
                           </div>
@@ -1641,6 +1720,24 @@ export function ApplicantTable() {
                             </button>
                           )}
 
+                          {/* Dedicated Country Ban Action (When Banned) */}
+                          {!isAgency && isBanned && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setManageBanTargetApplicant(applicant as any);
+                                setManageBanActiveRecord(activeBan || null);
+                                setIsManageBanModalOpen(true);
+                              }}
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-rose-950 dark:text-rose-200 bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/80 dark:hover:bg-rose-900 border border-rose-300 dark:border-rose-700 transition cursor-pointer shadow-2xs"
+                              title={`Manage country ban details and exception requests for ${activeBan?.country || "restricted destination"}`}
+                            >
+                              <ShieldAlert className="h-2.5 w-2.5 text-rose-700 dark:text-rose-400" />
+                              <span>Manage Ban</span>
+                            </button>
+                          )}
+
                           {/* Three Vertical Dots Action Menu */}
                           <Popover>
                             <PopoverTrigger asChild>
@@ -1956,6 +2053,41 @@ export function ApplicantTable() {
                                   <Send className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                   <span>Send to Extension</span>
                                 </button>
+
+                                {/* Dedicated Country Ban Action */}
+                                {!isAgency && (
+                                  isBanned ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setManageBanTargetApplicant(applicant as any);
+                                        setManageBanActiveRecord(activeBan || null);
+                                        setIsManageBanModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer font-semibold"
+                                    >
+                                      <ShieldAlert className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                      <span>Manage Ban</span>
+                                      <span className="ml-auto text-[9px] font-mono px-1.5 py-0.2 bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-800 rounded text-rose-800 dark:text-rose-300 font-bold">
+                                        Active
+                                      </span>
+                                    </button>
+                                  ) : canSetBan ? (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSetBanTargetApplicant(applicant as any);
+                                        setIsSetBanModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40 dark:hover:text-rose-300 transition cursor-pointer"
+                                    >
+                                      <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                      <span>Impose Country Ban</span>
+                                    </button>
+                                  ) : null
+                                )}
 
                                 <div className="h-px bg-slate-100 dark:bg-[#252530] my-1" />
 
@@ -2539,6 +2671,30 @@ export function ApplicantTable() {
           }}
         />
       )}
+
+      {/* Country Ban Modals */}
+      <SetCountryBanModal
+        isOpen={isSetBanModalOpen}
+        onClose={() => setIsSetBanModalOpen(false)}
+        applicant={setBanTargetApplicant}
+        onSuccess={() => {
+          refetchActiveBans();
+          queryClient.invalidateQueries({ queryKey: ["applicants"] });
+        }}
+      />
+
+      <ManageCountryBanModal
+        isOpen={isManageBanModalOpen}
+        onClose={() => setIsManageBanModalOpen(false)}
+        applicant={manageBanTargetApplicant}
+        activeBanRecord={manageBanActiveRecord}
+        isManagerOrAdmin={isManagerOrAdmin}
+        canSetBan={canSetBan}
+        onSuccess={() => {
+          refetchActiveBans();
+          queryClient.invalidateQueries({ queryKey: ["applicants"] });
+        }}
+      />
     </div>
   );
 }

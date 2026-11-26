@@ -17,14 +17,11 @@ import {
   Trash2,
   Image as ImageIcon,
   ShieldAlert,
-  Globe,
   MapPin,
-  HardDrive,
   RefreshCw,
   Bell,
   Coins,
   FileSpreadsheet,
-  Users,
   CheckCircle2,
   AlertCircle,
   ExternalLink,
@@ -55,23 +52,24 @@ import {
   setFxRateV2,
   fetchFxRatesNowV2,
 } from "@/lib/api/v2/finance";
-import { testStorageConnectionV2, V2StorageConnectionStatus } from "@/lib/api/v2/storage";
 import { regenerateVapidKeysV2, sendTestPushV2 } from "@/lib/api/v2/notifications";
 import {
-  getStorageSettingsV2,
-  updateStorageSettingsV2,
   getExchangeRateSettingsV2,
   updateExchangeRateSettingsV2,
   getNotificationSettingsV2,
   updateNotificationSettingsV2,
   listCorridorsV2,
   updateCorridorFeesV2,
-  V2StorageSettings,
   V2ExchangeRateSettings,
   V2NotificationSettings,
   V2CorridorConfig,
   V2CorridorFeeItem,
 } from "@/lib/api/v2/settings";
+import {
+  getCorridorStepsV2,
+  REGISTERED_WORKFLOW_COUNTRIES,
+  V2CorridorStepDefinition,
+} from "@/lib/api/v2/corridor";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { cn } from "@/lib/utils";
 
@@ -98,9 +96,9 @@ export default function SettingsPage() {
   const isManager = userRoles.some((r) => ["Manager"].includes(r));
   const isReadOnlyUser = isReadOnly() && !isAdmin && !isManager;
 
-  // Active section tab
+  // Active section tab: Company, Exchange Rates, Notifications, Corridor Fees
   const [settingsTab, setSettingsTab] = React.useState<
-    "company" | "storage" | "exchange" | "notifications" | "corridors" | "employees" | "agencies"
+    "company" | "exchange" | "notifications" | "corridors"
   >("company");
 
   // ==========================================
@@ -209,100 +207,7 @@ export default function SettingsPage() {
   };
 
   // ==========================================
-  // SECTION 2: Cloudflare R2 Storage (Admin)
-  // ==========================================
-  const {
-    data: storageSettings,
-    isLoading: isLoadingStorage,
-    refetch: refetchStorage,
-  } = useQuery({
-    queryKey: ["v2_storage_settings"],
-    queryFn: () => getStorageSettingsV2(),
-    enabled: isAdmin && settingsTab === "storage",
-  });
-
-  const [storageForm, setStorageForm] = React.useState<{
-    r2_account_id: string;
-    r2_bucket_name: string;
-    r2_public_url_base: string;
-    r2_access_key_id: string;
-    r2_secret_access_key: string;
-  }>({
-    r2_account_id: "",
-    r2_bucket_name: "",
-    r2_public_url_base: "",
-    r2_access_key_id: "",
-    r2_secret_access_key: "",
-  });
-
-  // The Go backend takes R2 from the server's environment only and sends read_only.
-  const storageReadOnly = !!storageSettings?.read_only;
-  const [testResult, setTestResult] = React.useState<V2StorageConnectionStatus | null>(null);
-  const [isTestingStorage, setIsTestingStorage] = React.useState(false);
-
-  React.useEffect(() => {
-    if (storageSettings) {
-      setStorageForm({
-        r2_account_id: storageSettings.r2_account_id || "",
-        r2_bucket_name: storageSettings.r2_bucket_name || "",
-        r2_public_url_base: storageSettings.r2_public_url_base || "",
-        r2_access_key_id: storageSettings.r2_access_key_id || "",
-        r2_secret_access_key: "",
-      });
-    }
-  }, [storageSettings]);
-
-  const saveStorageMutation = useMutation({
-    mutationFn: async () => {
-      if (storageForm.r2_public_url_base && !storageForm.r2_public_url_base.startsWith("https://")) {
-        throw new Error("Public URL Base must begin with https://");
-      }
-      const payload: any = {
-        r2_account_id: storageForm.r2_account_id,
-        r2_bucket_name: storageForm.r2_bucket_name,
-        r2_public_url_base: storageForm.r2_public_url_base,
-        r2_access_key_id: storageForm.r2_access_key_id,
-      };
-      if (storageForm.r2_secret_access_key && storageForm.r2_secret_access_key.trim()) {
-        payload.r2_secret_access_key = storageForm.r2_secret_access_key.trim();
-      }
-      return await updateStorageSettingsV2(payload);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["v2_storage_settings"] });
-      toast.success("Storage Settings Saved", {
-        description: "Cloudflare R2 configuration updated successfully.",
-      });
-    },
-    onError: (err: any) => {
-      toast.error("Storage Update Failed", {
-        description: formatCleanErrorMessage(err) || "Failed to save R2 storage settings.",
-      });
-    },
-  });
-
-  const handleTestStorage = async () => {
-    setIsTestingStorage(true);
-    setTestResult(null);
-    try {
-      const res = await testStorageConnectionV2();
-      setTestResult(res);
-      if (res.status === "success") {
-        toast.success("Connection Successful", { description: res.message });
-      } else {
-        toast.error("Connection Check Failed", { description: res.message });
-      }
-    } catch (err: any) {
-      const msg = formatCleanErrorMessage(err) || "Storage engine test call failed.";
-      setTestResult({ status: "error", message: msg });
-      toast.error("Connection Error", { description: msg });
-    } finally {
-      setIsTestingStorage(false);
-    }
-  };
-
-  // ==========================================
-  // SECTION 3: Exchange Rates & Money Settings
+  // SECTION 2: Exchange Rates & Money Settings
   // ==========================================
   const canManageExchange = isAdmin || isFinanceManager;
   const {
@@ -497,7 +402,7 @@ export default function SettingsPage() {
   };
 
   // ==========================================
-  // SECTION 5: Corridor Fees (Manager & Admin)
+  // SECTION 4: Corridor Fees (Manager & Admin)
   // ==========================================
   const canManageCorridors = isAdmin || isManager;
   const canViewCorridors = canManageCorridors || isFinanceManager;
@@ -514,17 +419,79 @@ export default function SettingsPage() {
   const [selectedCorridorCountry, setSelectedCorridorCountry] = React.useState<string>("Saudi Arabia");
   const [activeCorridorFees, setActiveCorridorFees] = React.useState<V2CorridorFeeItem[]>([]);
 
+  // Authoritative corridor clearance steps fetched dynamically using corridor_engine.get_corridor_steps
+  const {
+    data: corridorSteps = [],
+    isLoading: isLoadingSteps,
+    isError: isStepsError,
+    error: stepsError,
+    refetch: refetchSteps,
+  } = useQuery({
+    queryKey: ["v2_corridor_steps", selectedCorridorCountry],
+    queryFn: () => getCorridorStepsV2(selectedCorridorCountry),
+    enabled: canViewCorridors && settingsTab === "corridors" && !!selectedCorridorCountry,
+  });
+
+  // Dynamic available corridor countries: baseline registered corridors + backend configured
+  const availableCorridorCountries = React.useMemo(() => {
+    const set = new Set<string>();
+    REGISTERED_WORKFLOW_COUNTRIES.forEach((c) => set.add(c));
+    corridors.forEach((c) => {
+      if (c.destination_country) set.add(c.destination_country);
+    });
+    return Array.from(set);
+  }, [corridors]);
+
   const activeCorridor = React.useMemo(() => {
-    return corridors.find((c) => c.destination_country === selectedCorridorCountry) || corridors[0];
+    return corridors.find((c) => c.destination_country === selectedCorridorCountry);
   }, [corridors, selectedCorridorCountry]);
 
+  // Synchronize active fees when switching countries so stale fees never leak between corridors
   React.useEffect(() => {
-    if (activeCorridor?.fees) {
+    if (activeCorridor?.fees && Array.isArray(activeCorridor.fees)) {
       setActiveCorridorFees([...activeCorridor.fees]);
     } else {
       setActiveCorridorFees([]);
     }
-  }, [activeCorridor]);
+  }, [activeCorridor, selectedCorridorCountry]);
+
+  // Allowed fee types per corridor (Registration Fee strictly excluded)
+  const allowedFeeTypes = React.useMemo(() => {
+    if (activeCorridor?.allowed_fee_types && activeCorridor.allowed_fee_types.length > 0) {
+      return activeCorridor.allowed_fee_types.filter((t) => t !== "Registration Fee");
+    }
+    if (selectedCorridorCountry === "Kuwait") {
+      return [
+        "Kuwait LMIS Fee",
+        "Police Ashara Fee",
+        "Telesign Fee",
+        "Kuwait Embassy Fee",
+        "Medical Fee",
+        "Ticket Fee",
+      ];
+    }
+    return [
+      "LMIS Fee",
+      "Taeshir Fee",
+      "Injaz Fee",
+      "Wakala Fee",
+      "Embassy Fee",
+      "Medical Fee",
+      "Fingerprint Fee",
+      "Ticket Fee",
+    ];
+  }, [activeCorridor, selectedCorridorCountry]);
+
+  const allowedCurrencies = React.useMemo(() => {
+    if (activeCorridor?.allowed_currencies && activeCorridor.allowed_currencies.length > 0) {
+      return activeCorridor.allowed_currencies;
+    }
+    return selectedCorridorCountry === "Kuwait"
+      ? ["KWD", "ETB", "USD"]
+      : ["SAR", "ETB", "USD"];
+  }, [activeCorridor, selectedCorridorCountry]);
+
+  const isCorridorBusy = isLoadingCorridors || isLoadingSteps || isStepsError || corridorSteps.length === 0;
 
   const saveCorridorFeesMutation = useMutation({
     mutationFn: async () => {
@@ -544,10 +511,47 @@ export default function SettingsPage() {
     },
   });
 
+  const validateFees = (): string | null => {
+    if (!corridorSteps || corridorSteps.length === 0) {
+      return `Cannot save fee schedule: No clearance steps are loaded for ${selectedCorridorCountry}.`;
+    }
+    const validSteps = new Set(corridorSteps.map((s) => s.step_type));
+    for (let i = 0; i < activeCorridorFees.length; i++) {
+      const f = activeCorridorFees[i];
+      const row = i + 1;
+      if (!f.fee_type || !f.fee_type.trim()) {
+        return `Fee row #${row}: Fee Type is required.`;
+      }
+      if (f.fee_type === "Registration Fee") {
+        return `Fee row #${row}: Registration Fee is obsolete and cannot be configured as a corridor auto-expense. Registration income is logged via Finance.`;
+      }
+      if (!f.step_type || !validSteps.has(f.step_type)) {
+        return `Fee row #${row}: Invalid Triggering Clearance Step "${f.step_type || "None"}". Must be one of the loaded steps for ${selectedCorridorCountry}: ${Array.from(validSteps).join(", ")}.`;
+      }
+      if (typeof f.amount !== "number" || isNaN(f.amount) || f.amount <= 0) {
+        return `Fee row #${row}: Please enter a valid fee amount greater than 0.`;
+      }
+      if (!f.currency || !["ETB", "SAR", "KWD", "USD"].includes(f.currency)) {
+        return `Fee row #${row}: Please select a valid currency (ETB, SAR, KWD, USD).`;
+      }
+    }
+    return null;
+  };
+
+  const handleSaveCorridorFees = () => {
+    const validationError = validateFees();
+    if (validationError) {
+      toast.error("Validation Error", { description: validationError });
+      return;
+    }
+    saveCorridorFeesMutation.mutate();
+  };
+
   const handleAddCorridorFeeRow = () => {
-    const defaultStep = activeCorridor?.steps?.[0]?.step_type || "Wakala";
-    const defaultFeeType = activeCorridor?.allowed_fee_types?.[0] || "Agency Fee";
-    const defaultCurrency = activeCorridor?.allowed_currencies?.[0] || "ETB";
+    if (!corridorSteps || corridorSteps.length === 0) return;
+    const defaultStep = corridorSteps[0].step_type;
+    const defaultFeeType = allowedFeeTypes[0] || "LMIS Fee";
+    const defaultCurrency = allowedCurrencies[0] || "ETB";
     setActiveCorridorFees((prev) => [
       ...prev,
       {
@@ -568,20 +572,20 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl space-y-6">
+    <div className="container mx-auto px-4 py-4 max-w-7xl space-y-4">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 dark:border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-200 dark:border-zinc-800 pb-3">
         <div>
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 rounded-lg">
-              <Settings className="h-6 w-6" />
+              <Settings className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
-                Agency Settings & System Configuration
+              <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-white">
+                Agency Settings &amp; System Configuration
               </h1>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Configure corporate identity, Cloudflare storage, currency exchange rates, push notifications, and corridor fee schedules.
+                Configure corporate identity, currency exchange rates, push notifications, and corridor fee schedules.
               </p>
             </div>
           </div>
@@ -602,23 +606,23 @@ export default function SettingsPage() {
             )}
           >
             <Building2 className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Company & Invoice</span>
+            <span>Company &amp; Invoice</span>
           </button>
         )}
 
-        {isAdmin && (
+        {canViewCorridors && (
           <button
             type="button"
-            onClick={() => setSettingsTab("storage")}
+            onClick={() => setSettingsTab("corridors")}
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap",
-              settingsTab === "storage"
+              settingsTab === "corridors"
                 ? "bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-sm font-bold"
                 : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
             )}
           >
-            <HardDrive className="h-3.5 w-3.5 text-blue-600" />
-            <span>Cloudflare R2</span>
+            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Corridor Fees</span>
           </button>
         )}
 
@@ -653,50 +657,6 @@ export default function SettingsPage() {
             <span>Notifications</span>
           </button>
         )}
-
-        {canViewCorridors && (
-          <button
-            type="button"
-            onClick={() => setSettingsTab("corridors")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap",
-              settingsTab === "corridors"
-                ? "bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-sm font-bold"
-                : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
-            )}
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Corridor Fees</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setSettingsTab("employees")}
-          className={cn(
-            "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap",
-            settingsTab === "employees"
-              ? "bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-sm font-bold"
-              : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
-          )}
-        >
-          <Users className="h-3.5 w-3.5 text-indigo-600" />
-          <span>Employees & Roles</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSettingsTab("agencies")}
-          className={cn(
-            "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap",
-            settingsTab === "agencies"
-              ? "bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-sm font-bold"
-              : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
-          )}
-        >
-          <Globe className="h-3.5 w-3.5 text-teal-600" />
-          <span>Foreign Agencies</span>
-        </button>
       </div>
 
       {/* ==========================================
@@ -950,185 +910,7 @@ export default function SettingsPage() {
       )}
 
       {/* ==========================================
-          TAB 2: CLOUDFLARE R2 STORAGE (Admin Only)
-          ========================================== */}
-      {settingsTab === "storage" && isAdmin && (
-        <div className="space-y-6">
-          <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-                      <HardDrive className="h-4 w-4 text-blue-600" />
-                      Cloudflare R2 Object Storage
-                    </CardTitle>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        storageSettings?.configured
-                          ? "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                          : "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"
-                      )}
-                    >
-                      {storageSettings?.configured ? "Configured" : "Not Fully Configured"}
-                    </Badge>
-                  </div>
-                  <CardDescription className="text-xs text-slate-500">
-                    S3-compatible bucket for secure direct uploads (passports, photos, contracts, candidate videos).
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isTestingStorage}
-                    onClick={handleTestStorage}
-                    className="h-8 text-xs border-blue-300 text-blue-800 dark:border-blue-800 dark:text-blue-300 hover:bg-blue-50"
-                  >
-                    {isTestingStorage ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Test Connection
-                  </Button>
-                  {!storageReadOnly && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={saveStorageMutation.isPending}
-                    onClick={() => saveStorageMutation.mutate()}
-                    className="h-8 text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
-                  >
-                    {saveStorageMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <Save className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Save Storage Settings
-                  </Button>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="pt-4 space-y-4">
-              {testResult && (
-                <div
-                  className={cn(
-                    "flex items-center gap-2 p-3 rounded-lg text-xs font-semibold border",
-                    testResult.status === "success"
-                      ? "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800"
-                      : "bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800"
-                  )}
-                >
-                  {testResult.status === "success" ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-                  )}
-                  <span>
-                    Status: <strong>{testResult.status}</strong> — {testResult.message}
-                    {testResult.bucket && ` (Bucket: ${testResult.bucket})`}
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">R2 Account ID</Label>
-                  <Input
-                    value={storageForm.r2_account_id}
-                    readOnly={storageReadOnly}
-                    onChange={(e) => setStorageForm({ ...storageForm, r2_account_id: e.target.value.trim() })}
-                    placeholder="e.g. 5a1b2c3d4e5f..."
-                    className="h-8 text-xs font-mono"
-                  />
-                  <p className="text-[10px] text-slate-400">Found on the Cloudflare Dashboard &gt; R2 Overview page.</p>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">R2 Bucket Name</Label>
-                  <Input
-                    value={storageForm.r2_bucket_name}
-                    readOnly={storageReadOnly}
-                    onChange={(e) => setStorageForm({ ...storageForm, r2_bucket_name: e.target.value.trim() })}
-                    placeholder="e.g. travel-agency-documents"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Public URL Base (must begin with https://)</Label>
-                  <Input
-                    value={storageForm.r2_public_url_base}
-                    readOnly={storageReadOnly}
-                    onChange={(e) => setStorageForm({ ...storageForm, r2_public_url_base: e.target.value.trim() })}
-                    placeholder="https://pub-abc123xyz.r2.dev"
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">R2 Access Key ID</Label>
-                  <Input
-                    value={storageForm.r2_access_key_id}
-                    readOnly={storageReadOnly}
-                    onChange={(e) => setStorageForm({ ...storageForm, r2_access_key_id: e.target.value.trim() })}
-                    placeholder="e.g. 8f7e6d5c4b3a..."
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1 md:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold">R2 Secret Access Key</Label>
-                    <Badge variant="outline" className="text-[10px]">
-                      {storageSettings?.secret_key_set ? "Secret Key Set" : "Not Set"}
-                    </Badge>
-                  </div>
-                  {!storageReadOnly && (
-                  <Input
-                    type="password"
-                    value={storageForm.r2_secret_access_key}
-                    onChange={(e) => setStorageForm({ ...storageForm, r2_secret_access_key: e.target.value })}
-                    placeholder={storageSettings?.secret_key_set ? "•••••••••••• (Leave blank to keep current secret)" : "Enter R2 Secret Access Key"}
-                    className="h-8 text-xs font-mono"
-                  />
-                  )}
-                </div>
-              </div>
-
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-900 dark:text-blue-200 space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Cloudflare R2 Setup Instructions
-                </div>
-                {storageReadOnly ? (
-                <p className="text-[11px] text-blue-800 dark:text-blue-300">
-                  Storage is set on the server itself, not on this screen: the R2_ACCOUNT_ID, R2_BUCKET_NAME,
-                  R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY values in its environment. To change the bucket or keys,
-                  ask whoever runs the server. Test Connection checks what it uses now.
-                </p>
-                ) : (
-                <p className="text-[11px] text-blue-800 dark:text-blue-300">
-                  1. Log into your Cloudflare Dashboard &rarr; <strong>R2</strong> &rarr; <strong>Manage R2 API Tokens</strong>.<br />
-                  2. Create an API token with <strong>Object Read &amp; Write</strong> permissions.<br />
-                  3. Copy your Account ID, Access Key ID, and Secret Access Key into the fields above.
-                </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ==========================================
-          TAB 3: EXCHANGE RATES & CURRENCIES
+          TAB 2: EXCHANGE RATES & CURRENCIES
           ========================================== */}
       {settingsTab === "exchange" && canManageExchange && (
         <div className="space-y-6">
@@ -1461,43 +1243,50 @@ export default function SettingsPage() {
       )}
 
       {/* ==========================================
-          TAB 5: CORRIDOR FEES (Manager & Admin)
+          TAB 4: CORRIDOR FEES (Manager & Admin)
           ========================================== */}
       {settingsTab === "corridors" && canViewCorridors && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800">
+            <CardHeader className="py-3 px-4 border-b border-slate-100 dark:border-zinc-800">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
                     <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                    Corridor Fee Schedules & Workflow Steps
+                    Corridor Fee Schedules &amp; Automated Expenses
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500">
-                    Configured corridor fees are automatically posted as Expenses to the worker&apos;s case when the respective step completes.
+                    Configured corridor fees are automatically posted as Expenses to the placement ledger when the respective clearance step completes.
                   </CardDescription>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedCorridorCountry}
-                    onChange={(e) => setSelectedCorridorCountry(e.target.value)}
-                    className="h-8 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded-md px-2.5 font-bold"
-                  >
-                    {corridors.map((c) => (
-                      <option key={c.destination_country} value={c.destination_country}>
-                        {c.destination_country}
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="corridor-country-select" className="text-xs font-semibold text-slate-700 dark:text-zinc-300 whitespace-nowrap">
+                      Destination Corridor:
+                    </Label>
+                    <select
+                      id="corridor-country-select"
+                      value={selectedCorridorCountry}
+                      onChange={(e) => setSelectedCorridorCountry(e.target.value)}
+                      disabled={isLoadingCorridors || saveCorridorFeesMutation.isPending}
+                      className="h-8 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded-md px-2.5 font-bold text-slate-900 dark:text-white shadow-xs focus:ring-1 focus:ring-emerald-500"
+                    >
+                      {availableCorridorCountries.map((country) => (
+                        <option key={country} value={country}>
+                          {country}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   {canManageCorridors && !isReadOnlyUser && (
                     <Button
                       type="button"
                       size="sm"
-                      disabled={saveCorridorFeesMutation.isPending}
-                      onClick={() => saveCorridorFeesMutation.mutate()}
-                      className="h-8 text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
+                      disabled={isCorridorBusy || saveCorridorFeesMutation.isPending}
+                      onClick={handleSaveCorridorFees}
+                      className="h-8 text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-semibold shadow-xs"
                     >
                       {saveCorridorFeesMutation.isPending ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1511,39 +1300,95 @@ export default function SettingsPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="pt-4 space-y-6">
-              {/* Ordered Steps Notice (Read-only sequence) */}
+            <CardContent className="pt-3 px-4 pb-4 space-y-4">
+              {/* Explanatory Banner: Triggering Clearance Step & Registration Income Note */}
+              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-lg text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-900 dark:text-emerald-300">
+                  <Info className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span>How Automated Corridor Expenses Work</span>
+                </div>
+                <p className="text-slate-600 dark:text-zinc-400 leading-relaxed text-[11px]">
+                  <strong>Triggering Clearance Step:</strong> When operational staff mark a clearance step as completed (e.g. Issued, Complete, Stamped) in the candidate&apos;s Follow-up workflow, the system automatically posts the configured fee amount as an Expense on the placement ledger.
+                </p>
+                <p className="text-slate-500 dark:text-zinc-400 text-[11px]">
+                  <em>Note: Candidate registration receipts are recorded as Income via the general Finance ledger (&ldquo;Log Income / Expense&rdquo; &rarr; <code className="font-mono">log_stage_income</code>), not as an automated corridor expense.</em>
+                </p>
+              </div>
+
+              {/* Authoritative Corridor Steps for Selected Country */}
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                   Authoritative Corridor Steps for {selectedCorridorCountry} (Fixed Sequence)
                 </Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeCorridor?.steps?.map((st, i) => (
-                    <Badge
-                      key={st.step_type || i}
+
+                {isLoadingSteps ? (
+                  <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                    <span>Loading authoritative clearance steps from backend...</span>
+                  </div>
+                ) : isStepsError ? (
+                  <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 text-xs text-red-800 dark:text-red-300 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                      <span>Failed to load steps for {selectedCorridorCountry}: {formatCleanErrorMessage(stepsError)}</span>
+                    </div>
+                    <Button
+                      size="sm"
                       variant="outline"
-                      className="text-xs py-1 px-2.5 bg-slate-50 dark:bg-zinc-800/40 border-slate-300 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                      onClick={() => refetchSteps()}
+                      className="h-6 text-[11px] border-red-300 hover:bg-red-100 dark:border-red-800"
                     >
-                      <span className="font-mono text-emerald-600 dark:text-emerald-400 mr-1.5">#{i + 1}</span>
-                      {st.title || st.step_type}
-                    </Badge>
-                  )) || <p className="text-xs text-slate-400 italic">No steps loaded for this corridor.</p>}
-                </div>
+                      Retry
+                    </Button>
+                  </div>
+                ) : corridorSteps.length === 0 ? (
+                  <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>No clearance steps are defined in the backend Corridor Definition for {selectedCorridorCountry}. A backend administrator must configure Corridor Steps in Frappe before fee schedules can be bound.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {corridorSteps.map((st, i) => (
+                      <Badge
+                        key={st.step_type || i}
+                        variant="outline"
+                        className="text-xs py-1 px-2.5 bg-slate-50 dark:bg-zinc-800/40 border-slate-300 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                      >
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400 mr-1.5 font-bold">
+                          #{st.sequence_order ?? (i + 1)}
+                        </span>
+                        {st.title || st.step_type}
+                        {st.is_mandatory ? (
+                          <span className="ml-1.5 text-[10px] text-slate-500 font-normal">(Mandatory)</span>
+                        ) : (
+                          <span className="ml-1.5 text-[10px] text-amber-600 font-normal">(Optional)</span>
+                        )}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Editable Fee Table */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-slate-900 dark:text-white">
-                    Auto-Expense Fee Schedule ({selectedCorridorCountry})
-                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-semibold text-slate-900 dark:text-white">
+                      Auto-Expense Fee Schedule ({selectedCorridorCountry})
+                    </Label>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {activeCorridorFees.length} {activeCorridorFees.length === 1 ? "fee row" : "fee rows"}
+                    </Badge>
+                  </div>
+
                   {canManageCorridors && !isReadOnlyUser && (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      disabled={isCorridorBusy}
                       onClick={handleAddCorridorFeeRow}
-                      className="h-7 text-xs border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-300"
+                      className="h-7 text-xs border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                     >
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add Fee Row
@@ -1575,34 +1420,24 @@ export default function SettingsPage() {
                                 value={fee.fee_type}
                                 disabled={!canManageCorridors || isReadOnlyUser}
                                 onChange={(e) => handleUpdateCorridorFeeRow(idx, { fee_type: e.target.value })}
-                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5"
+                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5 focus:ring-1 focus:ring-emerald-500"
                               >
-                                {activeCorridor?.allowed_fee_types?.map((ft) => (
+                                {allowedFeeTypes.map((ft) => (
                                   <option key={ft} value={ft}>
                                     {ft}
                                   </option>
-                                )) || (
-                                  <>
-                                    <option value="Registration Fee">Registration Fee</option>
-                                    <option value="Medical Fee">Medical Fee</option>
-                                    <option value="Wakala Fee">Wakala Fee</option>
-                                    <option value="Injaz Fee">Injaz Fee</option>
-                                    <option value="Embassy Fee">Embassy Fee</option>
-                                    <option value="Fingerprint Fee">Fingerprint Fee</option>
-                                    <option value="Ticket Fee">Ticket Fee</option>
-                                  </>
-                                )}
+                                ))}
                               </select>
                             </td>
 
                             <td className="py-2 px-3">
                               <select
                                 value={fee.step_type}
-                                disabled={!canManageCorridors || isReadOnlyUser}
+                                disabled={!canManageCorridors || isReadOnlyUser || corridorSteps.length === 0}
                                 onChange={(e) => handleUpdateCorridorFeeRow(idx, { step_type: e.target.value })}
-                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5 font-medium"
+                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5 font-medium focus:ring-1 focus:ring-emerald-500"
                               >
-                                {activeCorridor?.steps?.map((st) => (
+                                {corridorSteps.map((st) => (
                                   <option key={st.step_type} value={st.step_type}>
                                     {st.title || st.step_type}
                                   </option>
@@ -1613,6 +1448,8 @@ export default function SettingsPage() {
                             <td className="py-2 px-3">
                               <Input
                                 type="number"
+                                min="0"
+                                step="any"
                                 disabled={!canManageCorridors || isReadOnlyUser}
                                 value={fee.amount || ""}
                                 onChange={(e) => handleUpdateCorridorFeeRow(idx, { amount: parseFloat(e.target.value) || 0 })}
@@ -1625,11 +1462,13 @@ export default function SettingsPage() {
                                 value={fee.currency}
                                 disabled={!canManageCorridors || isReadOnlyUser}
                                 onChange={(e) => handleUpdateCorridorFeeRow(idx, { currency: e.target.value })}
-                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5"
+                                className="h-7 text-xs border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 rounded px-1.5 focus:ring-1 focus:ring-emerald-500"
                               >
-                                <option value="ETB">ETB</option>
-                                <option value="SAR">SAR</option>
-                                <option value="USD">USD</option>
+                                {allowedCurrencies.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
                               </select>
                             </td>
 
@@ -1638,7 +1477,8 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveCorridorFeeRow(idx)}
-                                  className="text-slate-400 hover:text-rose-600 transition-colors p-1"
+                                  className="text-slate-400 hover:text-rose-600 transition-colors p-1 rounded"
+                                  title="Remove fee row"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -1654,70 +1494,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
-      )}
-
-      {/* ==========================================
-          TAB 6: EMPLOYEES & ACCESS (Shortcut card)
-          ========================================== */}
-      {settingsTab === "employees" && (
-        <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800">
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <Users className="h-4 w-4 text-indigo-600" />
-              Employee Accounts & RBAC Security Roles
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
-              Staff accounts, 16 authoritative roles, read-only twins, and password management are handled natively on the Employees page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <p className="text-xs text-slate-600 dark:text-zinc-400">
-              Manage user activation, password resets, role toggles, and new staff onboarding. The system ensures the first Administrator account is protected and destructive operations are validated against backend RBAC rules.
-            </p>
-            <Link href="/employees">
-              <Button size="sm" className="h-8 text-xs bg-indigo-900 hover:bg-indigo-950 text-white font-semibold">
-                Open Employee Administration Portal
-                <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ==========================================
-          TAB 7: FOREIGN AGENCIES (Shortcut card)
-          ========================================== */}
-      {settingsTab === "agencies" && (
-        <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800">
-            <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <Globe className="h-4 w-4 text-teal-600" />
-              Foreign Agencies & Commission Rate Matrices
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
-              Register foreign agencies, assign portal users, and configure default destination commission rates.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-4">
-            <p className="text-xs text-slate-600 dark:text-zinc-400">
-              Agency records require a valid destination country. Rates are configured by destination, track, gender, rate, and currency without silent defaults.
-            </p>
-            <div className="flex items-center gap-3">
-              <Link href="/contractors">
-                <Button size="sm" className="h-8 text-xs bg-teal-900 hover:bg-teal-950 text-white font-semibold">
-                  Manage Foreign Agencies
-                  <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
-                </Button>
-              </Link>
-              <Link href="/commission">
-                <Button size="sm" variant="outline" className="h-8 text-xs">
-                  View Commission Batches
-                  <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
       )}
     </div>
   );

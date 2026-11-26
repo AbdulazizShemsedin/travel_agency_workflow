@@ -13,7 +13,6 @@ import {
   ExternalLink,
   RefreshCw,
   UserCheck,
-  ListTodo,
   Send,
   Calendar,
   AlertCircle,
@@ -36,8 +35,6 @@ import {
   V2SentNotificationItem,
   V2LiveAlertItem,
 } from "@/lib/api/v2/notifications";
-import { listMyTodosV2 } from "@/lib/api/v2/clearance";
-import { V2UserTodoItem } from "@/types/workspace";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isPureForeignAgency } from "@/lib/auth/permissions";
 import { stripRecordIds, shortRef } from "@/lib/utils/display-id";
@@ -49,15 +46,15 @@ function NotificationsContent() {
   const tabParam = searchParams?.get("tab");
   const isAgency = React.useMemo(() => isPureForeignAgency(authUser), [authUser]);
 
-  // Three primary tabs: "attention" (Needs attention) | "sent" (Sent to you) | "tasks" (My tasks)
-  const [activeTab, setActiveTab] = React.useState<"attention" | "sent" | "tasks">(() => {
-    if (tabParam === "tasks" || tabParam === "sent" || tabParam === "attention") return tabParam;
+  // Two primary tabs: "attention" (Needs attention) | "sent" (Sent to you)
+  const [activeTab, setActiveTab] = React.useState<"attention" | "sent">(() => {
+    if (tabParam === "sent" || tabParam === "attention") return tabParam;
     return isAgency ? "sent" : "attention";
   });
   const [sentPage, setSentPage] = React.useState<number>(1);
 
   React.useEffect(() => {
-    if (tabParam === "tasks" || tabParam === "sent" || tabParam === "attention") {
+    if (tabParam === "sent" || tabParam === "attention") {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -106,26 +103,12 @@ function NotificationsContent() {
   const sentTotalCount = sentData?.total_count || 0;
   const sentTotalPages = Math.max(1, Math.ceil(sentTotalCount / 50));
 
-  // Tab 3: My Tasks ("My tasks")
-  const {
-    data: myTodos = [],
-    isLoading: isLoadingTodos,
-    isRefetching: isRefetchingTodos,
-    refetch: refetchTodos,
-  } = useQuery<V2UserTodoItem[]>({
-    queryKey: ["v2_my_todos", authUser?.email],
-    queryFn: () => listMyTodosV2("Open"),
-    enabled: !isAgency && Boolean(authUser?.email),
-    refetchInterval: 30000,
-  });
-
   const queryClient = useQueryClient();
   const [isActionPending, setIsActionPending] = React.useState(false);
 
   const handleRefresh = () => {
     if (activeTab === "attention") refetchAlerts();
     else if (activeTab === "sent") refetchSent();
-    else if (activeTab === "tasks") refetchTodos();
   };
 
   const handleMarkAllRead = async () => {
@@ -187,28 +170,15 @@ function NotificationsContent() {
     return alerts.slice(start, start + alertsPerPage);
   }, [alerts, alertPage]);
 
-  // Desktop pagination for My Tasks tab (5 tasks per page to fit viewport)
-  const [todoPage, setTodoPage] = React.useState(1);
-  const todosPerPage = 5;
-  const totalTodoPages = Math.max(1, Math.ceil(myTodos.length / todosPerPage));
-  const paginatedTodos = React.useMemo(() => {
-    const start = (todoPage - 1) * todosPerPage;
-    return myTodos.slice(start, start + todosPerPage);
-  }, [myTodos, todoPage]);
-
   const isCurrentRefetching =
     activeTab === "attention"
       ? isRefetchingAlerts
-      : activeTab === "sent"
-      ? isRefetchingSent
-      : isRefetchingTodos;
+      : isRefetchingSent;
 
   const isCurrentLoading =
     activeTab === "attention"
       ? isLoadingAlerts
-      : activeTab === "sent"
-      ? isLoadingSent
-      : isLoadingTodos;
+      : isLoadingSent;
 
   // Resolve target link and icon for notification alerts
   const resolveAlertMeta = (alert: V2LiveAlertItem) => {
@@ -267,14 +237,9 @@ function NotificationsContent() {
                 {sentTotalCount} Dispatched
               </Badge>
             )}
-            {activeTab === "tasks" && (
-              <Badge variant="outline" className="font-mono text-xs">
-                {myTodos.length} Open
-              </Badge>
-            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Real-time compliance alerts, server dispatch logs, and assigned operational duties.
+            Real-time compliance alerts and server dispatch logs.
           </p>
         </div>
 
@@ -348,26 +313,6 @@ function NotificationsContent() {
           )}
         </button>
 
-        {!isAgency && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("tasks")}
-            className={cn(
-              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer",
-              activeTab === "tasks"
-                ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
-                : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
-            )}
-          >
-            <ListTodo className="h-3.5 w-3.5" />
-            <span>My Tasks</span>
-            {myTodos.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500 text-white font-mono font-bold">
-                {myTodos.length}
-              </span>
-            )}
-          </button>
-        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -609,102 +554,7 @@ function NotificationsContent() {
         </div>
       )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* TAB 3: My Tasks                                               */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "tasks" && !isAgency && (
-        <div className="space-y-3">
-          {isCurrentLoading ? (
-            <div className="p-12 text-center text-xs text-slate-500">
-              <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-blue-600" />
-              Loading open tasks...
-            </div>
-          ) : myTodos.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 dark:border-[#222227] p-12 text-center">
-              <CheckCircle2 className="h-8 w-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Open Tasks</h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                You are completely caught up on your assigned clearance steps and operational duties.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {paginatedTodos.map((todo) => {
-                const displayDesc = stripRecordIds(todo.description || "Operational Duty");
 
-                return (
-                  <Card
-                    key={todo.name}
-                    className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
-                          <ListTodo className="h-4 w-4" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                              {displayDesc}
-                            </h4>
-                            <Badge variant="outline" className="text-[10px] font-mono py-0 text-blue-700 border-blue-200 dark:border-blue-800">
-                              {todo.reference_type || "Clearance Step"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono pt-1">
-                            <Calendar className="h-3 w-3" />
-                            <span>Created: {todo.creation}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Link
-                        href="/workspaces"
-                        className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 transition"
-                      >
-                        <span>Open Workspace</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    </div>
-                  </Card>
-                );
-              })}
-
-              {/* Desktop Compact Pagination for Tasks */}
-              {myTodos.length > todosPerPage && (
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#1e1e24] text-xs">
-                  <span className="text-slate-500 font-mono">
-                    Showing {Math.min(myTodos.length, (todoPage - 1) * todosPerPage + 1)}–{Math.min(myTodos.length, todoPage * todosPerPage)} of {myTodos.length} tasks
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setTodoPage((p) => Math.max(1, p - 1))}
-                      disabled={todoPage <= 1}
-                      className="h-7 text-xs"
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 px-1">
-                      {todoPage} / {totalTodoPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setTodoPage((p) => Math.min(totalTodoPages, p + 1))}
-                      disabled={todoPage >= totalTodoPages}
-                      className="h-7 text-xs"
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
